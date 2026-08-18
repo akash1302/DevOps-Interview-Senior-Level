@@ -1,7 +1,3 @@
-Haan bhai 😄 samajh gaya. Tumhe **ek hi Markdown code block** chahiye jise directly **Copy → GitHub `.md` file → Paste** kar sako.
-
-Main next se exactly isi format mein dunga:
-
 ````markdown
 # 🚀 DAY 1 — AWS VPC & NETWORKING
 
