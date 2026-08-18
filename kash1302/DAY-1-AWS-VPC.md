@@ -1,8 +1,3 @@
-Haan bhai, **ab samajh gaya exactly kya chahiye**. 😄
-Tumhe **DAY 1 ka complete material — jo humne actually discuss kiya + jo questions maine tumse pooche + tumhare answers + corrected/senior-level answers** — **ek hi single Markdown block** mein chahiye.
-
-Neeche **complete Day-1** hai. Isko directly GitHub `.md` file mein paste kar dena.
-
 ````markdown
 # 🚀 DAY 1 — AWS VPC & NETWORKING
 ## Senior DevOps / AWS Engineer — Interview Preparation
