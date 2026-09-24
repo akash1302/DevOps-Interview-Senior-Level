@@ -5,7 +5,7 @@
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I always build the VPC across at least two Availability Zones, so one zone going down doesn't take the app with it. I split it into three layers — public subnets for the load balancer and NAT Gateway, private subnets for the app servers, and separate database subnets for RDS with no internet access at all. The app servers can go out to the internet through the NAT Gateway when they need to, but nothing from outside can ever reach them directly. I also lock things down with Security Groups on the instances and NACLs at the subnet level, so even traffic between layers is restricted to only what's needed.
+I build the VPC across two or more zones, so if one zone goes down, the app still works. I use three layers of subnets. Public subnets hold the load balancer. Private subnets hold the app servers. A separate database subnet holds RDS, with no internet access at all. The app servers can go out to the internet through a NAT Gateway, but nothing from outside can come in to them directly. I also add Security Groups and NACLs, so even traffic between layers is controlled.
 
 </details>
 
@@ -16,7 +16,7 @@ I always build the VPC across at least two Availability Zones, so one zone going
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-VPC Peering works fine for a small number of VPCs, it's simple and cheap. The big catch is it doesn't chain — if A is peered to B and B is peered to C, A still can't reach C. So once you're past a handful of VPCs, managing all those individual connections gets messy fast. That's why for anything bigger, like dozens of accounts each with their own VPCs, I use Transit Gateway instead. It works like a hub — every VPC connects to it once, and it handles the routing centrally, so you're not managing hundreds of point-to-point links by hand.
+VPC Peering connects two VPCs directly. It's simple and cheap for a few VPCs. But it does not pass through. If A is connected to B, and B is connected to C, A still cannot reach C. So with many VPCs, you need a lot of separate connections, and that gets hard to manage. Transit Gateway solves this. It works like a hub. Every VPC connects to the hub once, and the hub handles all the routing. I use Transit Gateway once we have more than a few VPCs to connect.
 
 </details>
 
@@ -27,7 +27,7 @@ VPC Peering works fine for a small number of VPCs, it's simple and cheap. The bi
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Dynamic Scaling reacts after the fact — it watches something like CPU usage and adds instances once a threshold is crossed. The problem is new instances take time to start up, so there's always a short lag. For traffic that follows a known pattern, like a daily rush every morning, I pair that with Predictive Scaling, which looks at past traffic and adds capacity ahead of time, before the spike even hits. So the predictable stuff gets handled in advance, and Dynamic Scaling is still there as a backup for anything unexpected, like a surprise sale.
+Dynamic Scaling watches live metrics, like CPU, and adds servers after usage goes up. It works, but new servers take a little time to start, so there is a short delay. Predictive Scaling is different. It looks at past traffic patterns and adds servers *before* the expected spike. So if traffic always goes up at 8 AM, Predictive Scaling adds capacity before 8 AM. I use both together — Predictive Scaling for traffic I can plan for, and Dynamic Scaling for anything sudden and unplanned.
 
 </details>
 
@@ -38,7 +38,7 @@ Dynamic Scaling reacts after the fact — it watches something like CPU usage an
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I pick this based on what actually matters for the workload. If I need really low latency between instances, like for big data or high-performance jobs, I use **Cluster** placement, which packs instances close together on the same hardware. If I have a small set of critical nodes that must never fail together, like a control plane, I use **Spread** placement, which puts each one on separate physical hardware. For something like Kafka or Cassandra, where I want failures isolated across groups, I use **Partition** placement, which splits instances into separate racks by group.
+This is about where AWS physically places your servers. If I need very fast, low-delay communication between servers, I use **Cluster** placement — it puts them close together on the same hardware. If I have a few critical servers that must never fail at the same time, I use **Spread** placement — it puts each one on separate hardware. If I'm running something like Kafka, where I want failures grouped and isolated, I use **Partition** placement — it splits servers into separate groups.
 
 </details>
 
@@ -49,7 +49,7 @@ I pick this based on what actually matters for the workload. If I need really lo
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-By default, private instances reach S3 through the NAT Gateway, and that costs money for every gigabyte that passes through it. Instead, I attach an S3 Gateway Endpoint straight to the private subnet's route table. That keeps all the S3 traffic inside AWS's own network, skips the NAT Gateway completely, and it's actually faster too. We did this on a pipeline moving terabytes of logs to S3 every day, and it saved real money on NAT charges. I also lock it down further with an endpoint policy, so that subnet can only reach specific buckets, not all of S3.
+By default, a private server reaches S3 through the NAT Gateway, and that costs money for every bit of data sent. Instead, I add an S3 Gateway Endpoint to the subnet. This lets the server reach S3 directly, inside AWS's own network, skipping the NAT Gateway completely. It's cheaper and faster. We used this on a pipeline that moved a lot of data to S3 every day, and it saved real money. I also add a policy to the endpoint, so that subnet can only reach specific buckets, not all of S3.
 
 </details>
 

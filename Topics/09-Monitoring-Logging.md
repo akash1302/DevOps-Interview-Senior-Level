@@ -5,7 +5,7 @@
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Regular Prometheus stores everything on its own local disk, which causes real problems as you grow — keeping old data around gets expensive, and there's no easy way to see metrics from multiple clusters in one place. If that Prometheus pod goes down and loses its disk, that history is just gone. Thanos fixes this by shipping the metric data out to cheap storage like S3, and giving you one single place to query across every cluster at once. So instead of five separate dashboards for five clusters, you get one unified view with full history kept safe.
+Regular Prometheus keeps all its data on its own local disk. That causes problems as things grow — keeping old data around gets expensive, and there's no easy way to see all your clusters in one place. If that Prometheus server goes down and loses its disk, that history is just gone. Thanos fixes this by sending the data out to cheap, safe storage, and giving you one single place to look at metrics from every cluster at once. So instead of five separate dashboards, you get one place that shows everything, with the history kept safe.
 
 </details>
 
@@ -16,7 +16,7 @@ Regular Prometheus stores everything on its own local disk, which causes real pr
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Flow Logs record every accepted and rejected connection at the network level — source, destination, ports, all of it. When something can't connect, like an app failing to reach a database, I search the logs for that specific traffic, and if I see it getting rejected, I know right away it's a firewall rule, not an app bug. It's also genuinely useful for security — the same logs help catch things like a port scan or some unexpected connection nobody approved. For huge amounts of log data, I'd use a proper query tool instead of scrolling through logs by hand.
+Flow Logs record every connection at the network level — what was allowed, and what was blocked. When something can't connect, like an app that can't reach a database, I search the logs for that traffic. If I see it being blocked, I know right away it's a firewall rule, not a bug in the app. These logs are also useful for security — they can show things like an unexpected connection that nobody approved. For a huge amount of log data, I'd use a proper search tool instead of looking through it by hand.
 
 </details>
 
@@ -27,7 +27,7 @@ Flow Logs record every accepted and rejected connection at the network level —
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-For quick checks, `docker stats` is the first thing I run — it shows live CPU, memory, and network use for every running container, so I can spot the problem one fast. If a container dies unexpectedly, I check the events log to see if it was actually killed for running out of memory. For real production monitoring though, I don't rely on manually running commands — I turn on the built-in metrics endpoint so our monitoring tool can pull that data automatically and alert on it, instead of someone having to notice a problem by chance.
+For a quick check, I run a command that shows live CPU and memory use for every running container, so I can spot the problem fast. If a container dies suddenly, I check the event log to see if it actually ran out of memory. But for real, ongoing monitoring, I don't rely on checking things by hand. I turn on a metrics feature so our monitoring tool can pull that data automatically and send an alert, instead of someone having to notice a problem by luck.
 
 </details>
 

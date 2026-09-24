@@ -5,7 +5,7 @@
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-A rolling update works through two simple settings — `maxSurge`, which controls how many extra pods can be added on top of the normal count, and `maxUnavailable`, which controls how many pods can be offline at once. When I push a new version, Kubernetes brings up new pods, waits for each one to actually pass its readiness check, and only then starts shutting down the old ones. If I set `maxUnavailable: 0`, the app never drops below full capacity during the whole update. If something breaks mid-rollout, `kubectl rollout undo` switches traffic straight back to the last working version almost instantly.
+A rolling update uses two simple settings. One controls how many extra pods can be added while updating. The other controls how many old pods can go offline at once. When I push a new version, Kubernetes starts new pods, waits for each one to pass its health check, and only then shuts down an old one. If I set the offline number to zero, the app never loses capacity during the update. If something breaks halfway through, I can run one command to switch traffic straight back to the last working version.
 
 </details>
 
@@ -16,7 +16,7 @@ A rolling update works through two simple settings — `maxSurge`, which control
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-A PDB protects against planned disruptions, like draining a node for an upgrade — not against a random crash, which it can't do anything about. Without one, draining a node could accidentally take down every copy of an app at once if they're all sitting there. I set something like `minAvailable: 2`, and Kubernetes will actually block the drain until enough healthy pods exist somewhere else to keep that minimum met. One thing to watch for — a single-replica app with `minAvailable: 1` will block a drain forever, since there's no second copy to fall back on.
+A PDB protects against planned actions, like taking a server down for an upgrade. It does not protect against a random crash. Without a PDB, taking a server down could accidentally kill every copy of an app at once, if they're all sitting on that server. I set a rule like "at least 2 copies must stay running." Kubernetes will then block the server from being taken down until enough healthy copies exist somewhere else. One thing to watch for — if an app only has one copy, this rule can block the update forever, since there's no backup copy to rely on.
 
 </details>
 
@@ -27,7 +27,7 @@ A PDB protects against planned disruptions, like draining a node for an upgrade 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Deployments are for apps where any pod can replace any other pod, no problem — that's fine for something stateless. For something like a database, I use a StatefulSet instead, because it needs a stable identity and its own storage. Each pod gets a fixed name, like `db-0` and `db-1`, and its own dedicated storage that follows it around. If `db-1` crashes and moves to a different node, Kubernetes reconnects it to the exact same storage, so no data gets mixed up between pods. Also worth knowing — deleting a StatefulSet does not delete its storage automatically, that stays behind on purpose.
+A Deployment is for apps where any copy can replace any other copy, no problem. That's fine for something stateless, like a web server with no memory of past requests. For something like a database, I use a StatefulSet instead, because it needs its own identity and its own storage. Each copy gets a fixed name and its own dedicated storage that follows it around, even if it moves to a different server. Also — deleting a StatefulSet does not delete its storage. That storage stays behind on purpose, so data isn't lost by accident.
 
 </details>
 
@@ -38,7 +38,7 @@ Deployments are for apps where any pod can replace any other pod, no problem —
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I give each team its own namespace, and then set a `ResourceQuota` on it to cap the total CPU, memory, and pod count that team can use — so one team can't accidentally eat up resources meant for everyone else. On top of that, a `LimitRange` sets sane defaults for any container that doesn't specify its own limits. For access control, I use RBAC and bind each team to a `Role` scoped to just their own namespace, never a cluster-wide role, so one team genuinely can't see or touch another team's stuff.
+I give each team its own namespace, like a separate folder. Then I set a limit on that namespace — how much CPU and memory it's allowed to use in total. This stops one team from using up resources that other teams need. I also set default limits for any app that doesn't set its own. For access control, I give each team permission only inside their own namespace, never across the whole cluster. That way, one team genuinely can't see or touch another team's stuff.
 
 </details>
 
@@ -49,7 +49,7 @@ I give each team its own namespace, and then set a `ResourceQuota` on it to cap 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-A CRD lets you register a brand new type of object with Kubernetes, something that isn't built in by default. On its own, that's just a schema — it doesn't actually do anything. A Custom Controller is what makes it useful, it watches those objects and takes real action to keep the cluster matching what's declared. The Sidecar pattern is different — it's a second container running in the same pod as your app, sharing the same network. Istio uses this to automatically inject a proxy container into every pod, so traffic gets managed and secured without the app itself even knowing it's there.
+A CRD lets you add a brand new type of object to Kubernetes, one that isn't built in. On its own, that's just a definition, it doesn't do anything by itself. A Custom Controller is what actually makes it work — it watches for those objects and takes action to keep things matching what's expected. The Sidecar pattern is different. It's a second, helper container that runs next to your app, inside the same pod. Istio uses this to automatically add a network helper to every app, without changing the app's own code at all.
 
 </details>
 

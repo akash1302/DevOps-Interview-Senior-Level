@@ -5,7 +5,7 @@
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-The command is `terraform import`, but the big catch is it only updates the state file — it does not write any code for you. So my real steps are: first I write the matching resource block in code myself, then I run the import against that resource, and then I run `plan` right away to check for any difference. I keep tweaking the code until `plan` shows zero changes. Skipping that last check is how people end up with Terraform trying to delete something it just imported.
+The command is `terraform import`. But it only updates the state file. It does not write the code for you. So first, I write the matching resource block in code myself. Then I run the import. Then I run `plan` right away to check if anything looks different. I keep fixing the code until `plan` shows no changes at all. If I skip that last step, Terraform might try to delete the thing I just imported.
 
 </details>
 
@@ -16,7 +16,7 @@ The command is `terraform import`, but the big catch is it only updates the stat
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I build one shared module for each piece of infrastructure, like a VPC module, and then each environment gets its own small folder that calls that module with its own settings. So dev has its own folder pointing to its own state file, and prod has a completely separate folder pointing to a completely separate state file. I prefer this over Terraform Workspaces because the isolation is real and physical — there's no shared backend where picking the wrong workspace by mistake could touch production.
+I write one shared piece of code, called a module, for each thing I need, like a VPC. Then each environment — dev, staging, prod — has its own small folder that calls that same module with its own settings. Each environment also has its own separate state file. I like this better than Terraform Workspaces, because the separation is real. There is no shared file where picking the wrong option by mistake could touch production.
 
 </details>
 
@@ -27,7 +27,7 @@ I build one shared module for each piece of infrastructure, like a VPC module, a
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I always use an S3 bucket with encryption and versioning turned on, plus a DynamoDB table for locking, so two people can't run `apply` at the same time and step on each other. If someone deletes the state file by accident, I just pull the last good version straight from S3's version history — usually a two-minute fix. That's exactly why I treat versioning as required, not optional. If there's genuinely no backup at all, it's a much harder job — I'd have to check every real resource in the account and rebuild the state manually with `terraform import`, one resource at a time.
+I store the state file in an S3 bucket, with encryption and versioning turned on. I also use a lock, so two people can't run `apply` at the same time and break each other's work. If someone deletes the state file by mistake, I just restore the last good version from S3's history. That usually takes two minutes. This is exactly why versioning matters — without it, if the file is lost, I'd have to check every real resource by hand and rebuild the state one piece at a time.
 
 </details>
 
@@ -38,7 +38,7 @@ I always use an S3 bucket with encryption and versioning turned on, plus a Dynam
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I treat these as a last resort. `local-exec` runs a command on my own machine after a resource is created, like sending a notification. `remote-exec` connects into the new resource itself, over SSH, and runs commands there directly. The problem is both of these sit outside Terraform's normal tracking — they can fail quietly on a re-run, and Terraform has no real way to know if they actually worked. So instead, I usually push that setup work into things like a startup script or a pre-built image, since those are safer and easier to repeat reliably.
+I only use these as a last option. `local-exec` runs a command on my own machine after a resource is made. `remote-exec` connects into the new server and runs a command there. The problem with both is Terraform doesn't really track what they do. They can fail quietly, and running them again might not fix it. So instead, I usually set up new servers using a startup script or a ready-made image, since those are safer and easier to repeat.
 
 </details>
 
@@ -49,7 +49,7 @@ I treat these as a last resort. `local-exec` runs a command on my own machine af
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Secrets never go directly into code or a `.tfvars` file that's tracked in Git. Anything sensitive gets marked with `sensitive = true`, so Terraform hides it from the terminal and from CI logs. For something like a database password, I pull it in at run time from AWS Secrets Manager instead of passing it as plain text. The big catch people miss — `sensitive = true` only hides the value from the screen, it does **not** remove it from the state file. The state file still has the real value in it, so the S3 bucket holding that state also needs to be locked down and encrypted.
+Secrets never go into the code, and never get saved in Git. If a value is sensitive, I mark it with `sensitive = true`, so Terraform hides it on the screen and in the logs. For something like a database password, I pull it in from a secrets manager at run time, instead of typing it in directly. One thing to know — `sensitive = true` only hides the value from the screen. It does not remove it from the state file. The real value is still sitting in there, so the state file itself also needs to be locked down.
 
 </details>
 

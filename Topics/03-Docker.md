@@ -5,7 +5,7 @@
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-With a normal single-stage build, your final image ends up carrying the compiler and all the source code too, so it's huge, often over a gigabyte. Multi-stage builds fix that — you use one stage just to compile the code, and a second, much smaller stage that only copies over the final built file. For a Go app, that means building in a full Go image, then copying just the compiled binary into a tiny Alpine image for the final result. That can shrink the image from over a gigabyte down to around 20MB, which pulls faster and also removes a lot of unnecessary tools that could be a security risk sitting in production.
+A normal build packs the compiler and all the source code into the final image, so it ends up huge, often over a gigabyte. A multi-stage build fixes this. One stage builds the app. A second, much smaller stage only copies the finished file, and nothing else. For a Go app, this can take the image from over a gigabyte down to about 20MB. It's faster to download, and it also removes tools that aren't needed in production and could be a security risk.
 
 </details>
 
@@ -16,7 +16,7 @@ With a normal single-stage build, your final image ends up carrying the compiler
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-By default, containers run as root, and that's risky — if there's ever a container escape, the attacker gets root access on the real host, not just inside the container. To fix this, I create a normal, non-root user right in the Dockerfile and switch to it before the app runs. On top of that, I strip away all Linux capabilities at startup with `--cap-drop=ALL`, and only add back the one thing that's actually needed, like `NET_BIND_SERVICE` if the app needs to bind to port 80. That way, even if something goes wrong, the container has almost no extra power to do damage.
+By default, a container runs as root. That's risky, because if someone ever breaks out of the container, they get root on the real machine too. So I create a normal, non-root user in the Dockerfile, and I run the app as that user instead. I also strip away all extra Linux permissions at startup, and only add back the one thing the app actually needs, like the permission to use a low network port. This way, even if something goes wrong, there's very little damage it can do.
 
 </details>
 
@@ -27,7 +27,7 @@ By default, containers run as root, and that's risky — if there's ever a conta
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-The mistake people make is trusting `depends_on` alone — it only waits for the other container to *start*, not for the app inside it to actually be ready. So if your app starts before the database is really accepting connections, it just crashes right away. The fix is adding a real `healthcheck` to the database, and setting `condition: service_healthy` on the app that depends on it, so Compose actually waits for the database to pass its health check first. I also add retry logic in the app itself as a backup, just in case the timing is still off by a second or two.
+A common mistake is trusting `depends_on` alone. It only waits for the other container to *start*, not for it to actually be ready. So if the app starts before the database is really ready, it just crashes. The fix is adding a real health check to the database, and telling the app to wait for that health check to pass, not just for the container to start. I also add retry logic inside the app itself, just in case the timing is still a little off.
 
 </details>
 
@@ -38,7 +38,7 @@ The mistake people make is trusting `depends_on` alone — it only waits for the
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I never run a full `docker system prune` blindly in production — it can wipe out images I might need for a quick rollback, or worse, delete a volume holding real data. Instead, I check `docker system df` first to actually see what's using the space. Then I clean up in a targeted way — dangling images, stopped containers, old build cache. But volumes never get cleaned automatically in my scripts, I always check them by hand first, since one of them might be holding a database's actual data.
+I never run a full cleanup command blindly in production. It can delete images I might still need for a fast rollback, or worse, delete a volume with real data in it. Instead, I first check how much space is actually being used. Then I clean up in small, safe steps — old unused images, stopped containers, old build cache. I never delete volumes automatically. I always check them by hand first, since one of them might hold real database data.
 
 </details>
 
@@ -49,7 +49,7 @@ I never run a full `docker system prune` blindly in production — it can wipe o
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-`ENTRYPOINT` is the main command that always runs. `CMD` just gives it default arguments, which are easy to override when you run the container. So if I set `ENTRYPOINT ["ping"]` and `CMD ["localhost"]`, running the container normally pings localhost, but passing a different address at run time overrides just the `CMD` part, while the `ENTRYPOINT` stays fixed. One thing I always check — this only works right using the array format, like `["ping", "localhost"]`. Using the plain string format instead wraps everything in a shell, and that actually breaks how the container receives shutdown signals.
+`ENTRYPOINT` is the main command that always runs. `CMD` just gives it default settings, and those are easy to change when you start the container. So if `ENTRYPOINT` is `ping` and `CMD` is `localhost`, running it normally pings localhost. But I can pass a different address when I start it, and that only changes the `CMD` part — the `ENTRYPOINT` stays the same. One thing to always check — this only works right using the list format, like `["ping", "localhost"]`. Using plain text instead can break how the container shuts down cleanly.
 
 </details>
 
