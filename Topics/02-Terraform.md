@@ -5,7 +5,13 @@
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-The command is `terraform import`. But it only updates the state file. It does not write the code for you. So first, I write the matching resource block in code myself. Then I run the import. Then I run `plan` right away to check if anything looks different. I keep fixing the code until `plan` shows no changes at all. If I skip that last step, Terraform might try to delete the thing I just imported.
+The command is `terraform import`. But it only updates the state file. It does not write the code for you.
+
+So first, I write the matching resource block in code myself. Then I run the import. Then I run `plan` right away to check if anything looks different.
+
+**Write matching HCL → run `terraform import` → run `terraform plan` → keep fixing code until it shows zero changes.**
+
+If I skip that last step, Terraform might try to delete the thing I just imported.
 
 </details>
 
@@ -16,7 +22,13 @@ The command is `terraform import`. But it only updates the state file. It does n
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I write one shared piece of code, called a module, for each thing I need, like a VPC. Then each environment — dev, staging, prod — has its own small folder that calls that same module with its own settings. Each environment also has its own separate state file. I like this better than Terraform Workspaces, because the separation is real. There is no shared file where picking the wrong option by mistake could touch production.
+I write one shared piece of code, called a module, for each thing I need, like a VPC.
+
+Then each environment — dev, staging, prod — has its own small folder that calls that same module with its own settings.
+
+Each environment also has its own separate state file.
+
+I like this better than Terraform Workspaces, because the separation is real. There's no shared file where picking the wrong option by mistake could touch production.
 
 </details>
 
@@ -27,7 +39,13 @@ I write one shared piece of code, called a module, for each thing I need, like a
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I store the state file in an S3 bucket, with encryption and versioning turned on. I also use a lock, so two people can't run `apply` at the same time and break each other's work. If someone deletes the state file by mistake, I just restore the last good version from S3's history. That usually takes two minutes. This is exactly why versioning matters — without it, if the file is lost, I'd have to check every real resource by hand and rebuild the state one piece at a time.
+I store the state file in an S3 bucket, with encryption and versioning turned on.
+
+I also use a lock, so two people can't run `apply` at the same time and break each other's work.
+
+If someone deletes the state file by mistake, I just restore the last good version from S3's history. That usually takes two minutes.
+
+This is exactly why versioning matters — without it, if the file is lost, I'd have to check every real resource by hand and rebuild the state one piece at a time.
 
 </details>
 
@@ -38,7 +56,13 @@ I store the state file in an S3 bucket, with encryption and versioning turned on
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I only use these as a last option. `local-exec` runs a command on my own machine after a resource is made. `remote-exec` connects into the new server and runs a command there. The problem with both is Terraform doesn't really track what they do. They can fail quietly, and running them again might not fix it. So instead, I usually set up new servers using a startup script or a ready-made image, since those are safer and easier to repeat.
+I only use these as a last option.
+
+`local-exec` runs a command on my own machine after a resource is made. `remote-exec` connects into the new server and runs a command there.
+
+The problem with both is Terraform doesn't really track what they do. They can fail quietly, and running them again might not fix it.
+
+So instead, I usually set up new servers using a startup script or a ready-made image, since those are safer and easier to repeat.
 
 </details>
 
@@ -49,7 +73,13 @@ I only use these as a last option. `local-exec` runs a command on my own machine
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Secrets never go into the code, and never get saved in Git. If a value is sensitive, I mark it with `sensitive = true`, so Terraform hides it on the screen and in the logs. For something like a database password, I pull it in from a secrets manager at run time, instead of typing it in directly. One thing to know — `sensitive = true` only hides the value from the screen. It does not remove it from the state file. The real value is still sitting in there, so the state file itself also needs to be locked down.
+Secrets never go into the code, and never get saved in Git.
+
+If a value is sensitive, I mark it with `sensitive = true`, so Terraform hides it on the screen and in the logs.
+
+For something like a database password, I pull it in from a secrets manager at run time, instead of typing it in directly.
+
+One thing to know — `sensitive = true` only hides the value from the screen. It does not remove it from the state file. The real value is still sitting in there, so the state file itself also needs to be locked down.
 
 </details>
 
@@ -60,7 +90,13 @@ Secrets never go into the code, and never get saved in Git. If a value is sensit
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-`count` tracks resources by their position in a list, like the first one, second one, and so on. The problem is, if that list ever changes order, Terraform thinks a completely different resource is now sitting at that position, and it tries to delete and recreate things that didn't actually need to change. `for_each` tracks resources by a real key, like a name, instead of a position. So if the list order changes but the actual names stay the same, Terraform correctly leaves those resources alone. I default to `for_each` now for anything where the list of items might change over time.
+`count` tracks resources by their position in a list, like the first one, second one, and so on.
+
+The problem is, if that list ever changes order, Terraform thinks a completely different resource is now sitting at that position, and it tries to delete and recreate things that didn't actually need to change.
+
+`for_each` tracks resources by a real key, like a name, instead of a position. So if the list order changes but the actual names stay the same, Terraform correctly leaves those resources alone.
+
+I default to `for_each` now for anything where the list of items might change over time.
 
 </details>
 
@@ -71,7 +107,13 @@ Secrets never go into the code, and never get saved in Git. If a value is sensit
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I never let the provider version float freely — I pin it to a specific version, and I commit the lock file to Git, so everyone and every pipeline uses the exact same version. When I do want to upgrade, I bump the version in a branch, run it against a non-production environment first, and carefully read the plan output before applying anything. Some provider upgrades quietly change how a resource behaves, not just the version number, so I never assume an upgrade is safe just because it installed without an error.
+I never let the provider version float freely — I pin it to a specific version, and I commit the lock file to Git, so everyone and every pipeline uses the exact same version.
+
+When I do want to upgrade, I bump the version in a branch, run it against a non-production environment first, and carefully read the plan output before applying anything.
+
+**Pin version in lock file → bump version on a branch → test in non-prod → review plan output → merge and apply.**
+
+Some provider upgrades quietly change how a resource behaves, not just the version number, so I never assume an upgrade is safe just because it installed without an error.
 
 </details>
 
@@ -82,7 +124,13 @@ I never let the provider version float freely — I pin it to a specific version
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-A giant state file is usually a sign that too much infrastructure is being managed in one place. Every `plan` has to check every single resource in that file, so the bigger it gets, the slower everything gets, even for a tiny change. My fix is splitting it up — separate state files for separate layers, like networking, databases, and applications, each managed on its own. If one layer needs information from another, I read it through a safe, read-only reference, instead of putting everything in one giant file just for convenience.
+A giant state file is usually a sign that too much infrastructure is being managed in one place.
+
+Every `plan` has to check every single resource in that file, so the bigger it gets, the slower everything gets, even for a tiny change.
+
+My fix is splitting it up — separate state files for separate layers, like networking, databases, and applications, each managed on its own.
+
+If one layer needs information from another, I read it through a safe, read-only reference, instead of putting everything in one giant file just for convenience.
 
 </details>
 
@@ -93,9 +141,15 @@ A giant state file is usually a sign that too much infrastructure is being manag
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-The lock exists on purpose, to stop two applies from running at the same time and corrupting the state, so I never just force past it without checking first. My first step is finding out who or what actually holds the lock right now. I check the DynamoDB lock table — the entry there usually shows which pipeline run or machine grabbed it.
+The lock exists on purpose, to stop two applies from running at the same time and corrupting the state, so I never just force past it without checking first.
 
-Then I go check if that pipeline job is actually still running, or if it crashed or got cancelled without cleaning up after itself. If it's genuinely dead, I can safely force-unlock using the lock ID shown in the error. But I have to be completely sure that job isn't actually mid-apply somewhere, because force-unlocking while a real apply is running is exactly how you corrupt the state. If it turns out a teammate's job is holding it, I just message them first instead of touching anything. Longer term, the fix is making sure pipelines can't run in parallel against the same state in the first place, so this doesn't keep happening.
+My first step is finding out who or what actually holds the lock right now. I check the DynamoDB lock table — the entry there usually shows which pipeline run or machine grabbed it.
+
+Then I go check if that pipeline job is actually still running, or if it crashed or got cancelled without cleaning up after itself.
+
+**Check DynamoDB lock entry → confirm if that job is actually still running → dead job means safe to force-unlock → still running means wait, or a teammate's job means message them first.**
+
+If it's genuinely dead, I can safely force-unlock using the lock ID shown in the error. I have to be completely sure that job isn't mid-apply somewhere, because force-unlocking while a real apply is running is exactly how you corrupt the state. Longer term, the fix is making sure pipelines can't run in parallel against the same state in the first place.
 
 </details>
 

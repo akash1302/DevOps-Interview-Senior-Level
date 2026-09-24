@@ -5,7 +5,13 @@
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Regular Prometheus keeps all its data on its own local disk. That causes problems as things grow — keeping old data around gets expensive, and there's no easy way to see all your clusters in one place. If that Prometheus server goes down and loses its disk, that history is just gone. Thanos fixes this by sending the data out to cheap, safe storage, and giving you one single place to look at metrics from every cluster at once. So instead of five separate dashboards, you get one place that shows everything, with the history kept safe.
+Regular Prometheus keeps all its data on its own local disk. That causes problems as things grow — keeping old data around gets expensive, and there's no easy way to see all your clusters in one place.
+
+If that Prometheus server goes down and loses its disk, that history is just gone.
+
+Thanos fixes this by sending the data out to cheap, safe storage, and giving you one single place to look at metrics from every cluster at once.
+
+So instead of five separate dashboards, you get one place that shows everything, with the history kept safe.
 
 </details>
 
@@ -16,7 +22,13 @@ Regular Prometheus keeps all its data on its own local disk. That causes problem
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Flow Logs record every connection at the network level — what was allowed, and what was blocked. When something can't connect, like an app that can't reach a database, I search the logs for that traffic. If I see it being blocked, I know right away it's a firewall rule, not a bug in the app. These logs are also useful for security — they can show things like an unexpected connection that nobody approved. For a huge amount of log data, I'd use a proper search tool instead of looking through it by hand.
+Flow Logs record every connection at the network level — what was allowed, and what was blocked.
+
+When something can't connect, like an app that can't reach a database, I search the logs for that traffic. If I see it being blocked, I know right away it's a firewall rule, not a bug in the app.
+
+These logs are also useful for security — they can show things like an unexpected connection that nobody approved.
+
+For a huge amount of log data, I'd use a proper search tool instead of looking through it by hand.
 
 </details>
 
@@ -27,7 +39,11 @@ Flow Logs record every connection at the network level — what was allowed, and
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-For a quick check, I run a command that shows live CPU and memory use for every running container, so I can spot the problem fast. If a container dies suddenly, I check the event log to see if it actually ran out of memory. But for real, ongoing monitoring, I don't rely on checking things by hand. I turn on a metrics feature so our monitoring tool can pull that data automatically and send an alert, instead of someone having to notice a problem by luck.
+For a quick check, I run a command that shows live CPU and memory use for every running container, so I can spot the problem fast.
+
+If a container dies suddenly, I check the event log to see if it actually ran out of memory.
+
+But for real, ongoing monitoring, I don't rely on checking things by hand. I turn on a metrics feature so our monitoring tool can pull that data automatically and send an alert, instead of someone having to notice a problem by luck.
 
 </details>
 
@@ -38,7 +54,13 @@ For a quick check, I run a command that shows live CPU and memory use for every 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-An SLI is just a real number you measure, like how many requests succeeded in the last hour. An SLO is the internal target you set for that number, like "99.9% of requests should succeed" — that's the goal the team actually works toward. An SLA is the promise made to the customer, usually with a real penalty attached if it's broken. I always set the SLO a bit stricter than the SLA, so the team gets an early warning and can react before we actually break the promise made to the customer, not after.
+An SLI is just a real number you measure, like how many requests succeeded in the last hour.
+
+An SLO is the internal target you set for that number, like "99.9% of requests should succeed" — that's the goal the team actually works toward.
+
+An SLA is the promise made to the customer, usually with a real penalty attached if it's broken.
+
+I always set the SLO a bit stricter than the SLA, so the team gets an early warning and can react before we actually break the promise made to the customer, not after.
 
 </details>
 
@@ -49,7 +71,13 @@ An SLI is just a real number you measure, like how many requests succeeded in th
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I only page a real person for things that need action right now, and would actually hurt the business if ignored — like the whole site being down. Anything that's just informational, or can wait until morning, goes to a dashboard or a non-urgent channel instead, never a phone alert. I also set alerts on trends, not just a single bad reading, since one slow request doesn't mean anything, but the error rate climbing steadily for ten minutes does. If the team starts ignoring alerts because there are too many false ones, that's a sign the alerting itself needs fixing, not a sign the team needs to try harder.
+I only page a real person for things that need action right now, and would actually hurt the business if ignored — like the whole site being down.
+
+Anything that's just informational, or can wait until morning, goes to a dashboard or a non-urgent channel instead, never a phone alert.
+
+I also set alerts on trends, not just a single bad reading, since one slow request doesn't mean anything, but the error rate climbing steadily for ten minutes does.
+
+If the team starts ignoring alerts because there are too many false ones, that's a sign the alerting itself needs fixing, not a sign the team needs to try harder.
 
 </details>
 
@@ -60,7 +88,11 @@ I only page a real person for things that need action right now, and would actua
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I never leave logs sitting only on the individual server that created them, since that server might get replaced or deleted at any time, and the logs would just disappear with it. Instead, every server and container ships its logs out to one central place in real time. I also make sure logs are structured, not just plain free text, so I can actually search and filter them properly — like finding every log line for one specific request, across every service it touched, instead of manually reading through raw text files one at a time.
+I never leave logs sitting only on the individual server that created them, since that server might get replaced or deleted at any time, and the logs would just disappear with it.
+
+Instead, every server and container ships its logs out to one central place in real time.
+
+I also make sure logs are structured, not just plain free text, so I can actually search and filter them properly — like finding every log line for one specific request, across every service it touched.
 
 </details>
 
@@ -71,12 +103,16 @@ I never leave logs sitting only on the individual server that created them, sinc
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Since the app itself is fine, I don't waste time debugging the application code — this is almost always a permissions or config problem around logging, not the app breaking. The first thing I check is the task's execution role, since it needs specific permission to create log streams and write log events. If someone touched that IAM policy recently, even by accident, that alone would explain logs just stopping cold.
+Since the app itself is fine, I don't waste time debugging the application code — this is almost always a permissions or config problem around logging, not the app breaking.
 
-If the permissions check out, I go look at the task definition itself — is the logging driver actually set correctly, and is the log group name spelled right, since a typo there fails silently instead of throwing an obvious error. I'd also check if we've hit an account-level limit on CloudWatch, like too many log groups or too much data coming in. And if the task itself is failing to even start properly, I'd check the ECS service events directly, since those often show the real reason in plain language, like it failing to pull a secret it needs, which would explain both the missing logs and confirm it's a config issue, not the app.
+The first thing I check is the task's execution role, since it needs specific permission to create log streams and write log events. If someone touched that IAM policy recently, even by accident, that alone would explain logs just stopping cold.
+
+If the permissions check out, I go look at the task definition itself — is the logging driver actually set correctly, and is the log group name spelled right, since a typo there fails silently.
+
+**Check execution role permissions → check logging driver and log group name in the task definition → check CloudWatch account limits → check ECS service events for the real error.**
+
+I'd also check if we've hit an account-level limit on CloudWatch. And if the task itself is failing to even start properly, I'd check the ECS service events directly, since those often show the real reason in plain language.
 
 </details>
-
----
 
 ---

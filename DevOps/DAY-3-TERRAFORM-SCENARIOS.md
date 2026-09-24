@@ -3,7 +3,7 @@
 # DAY 3 — TERRAFORM SCENARIO-BASED INTERVIEW QUESTIONS
 ## Senior DevOps / Platform Engineer — Interview Preparation
 
-Quick, plain-English candidate answers — short and to the point, the way you'd actually say it out loud in an interview.
+Quick, plain-English candidate answers — short paragraphs, the way you'd actually walk through it out loud in an interview.
 
 </div>
 
@@ -29,7 +29,15 @@ Quick, plain-English candidate answers — short and to the point, the way you'd
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I never touch production resources during this, it's purely a state file move. First, I define the new S3 backend block in the code, then run `terraform init -migrate-state`, and Terraform copies the existing state over and asks for confirmation before switching. I always back up the old state file first, just in case. Once it's migrated, I run a `plan` immediately to confirm it shows zero changes, which proves nothing actually drifted during the move.
+I never touch production resources during this, it's purely a state file move.
+
+First, I define the new S3 backend block in the code, then run `terraform init -migrate-state`, and Terraform copies the existing state over and asks for confirmation before switching.
+
+I always back up the old state file first, just in case.
+
+**Add S3 backend block → back up old state → `terraform init -migrate-state` → confirm the copy → run `plan` to prove zero drift.**
+
+Once it's migrated, I run a `plan` immediately to confirm it shows zero changes, which proves nothing actually drifted during the move.
 
 </details>
 
@@ -40,7 +48,13 @@ I never touch production resources during this, it's purely a state file move. F
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-`count` tracks resources by their position in the list, like index 0, 1, 2 — it has no idea what the actual value at that position is. So if the list order shifts at all, Terraform thinks the resource at that index is now something different, and it destroys and recreates it, even though the same value still exists somewhere else in the list. The fix is using `for_each` with a map or a set instead, since that tracks resources by a stable key, not by position. I always default to `for_each` now unless I have a real reason not to.
+`count` tracks resources by their position in the list, like index 0, 1, 2 — it has no idea what the actual value at that position is.
+
+So if the list order shifts at all, Terraform thinks the resource at that index is now something different, and it destroys and recreates it, even though the same value still exists somewhere else in the list.
+
+The fix is using `for_each` with a map or a set instead, since that tracks resources by a stable key, not by position.
+
+I always default to `for_each` now unless I have a real reason not to.
 
 </details>
 
@@ -51,7 +65,11 @@ I never touch production resources during this, it's purely a state file move. F
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-That's exactly what `terraform taint` is for, or on newer versions, `terraform apply -replace=<resource_address>`. It marks the resource so the next `apply` destroys and recreates it, without touching anything else in the plan. I always run `plan` right after to confirm only that one resource shows up as changing, since tainting the wrong address can quietly catch other resources in a dependency chain.
+That's exactly what `terraform taint` is for, or on newer versions, `terraform apply -replace=<resource_address>`.
+
+It marks the resource so the next `apply` destroys and recreates it, without touching anything else in the plan.
+
+I always run `plan` right after to confirm only that one resource shows up as changing, since tainting the wrong address can quietly catch other resources in a dependency chain.
 
 </details>
 
@@ -62,7 +80,11 @@ That's exactly what `terraform taint` is for, or on newer versions, `terraform a
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-`-target` applies just one resource and skips the rest of the plan, which sounds convenient but it's risky as a habit. The big catch is it can leave your state out of sync with your actual desired config, since dependent resources don't get reconciled at the same time. I only use it in a real emergency, like fixing one broken resource fast during an incident, and I always follow it up with a full, untargeted `apply` right after to bring everything back in sync.
+`-target` applies just one resource and skips the rest of the plan, which sounds convenient but it's risky as a habit.
+
+The problem is it can leave your state out of sync with your actual desired config, since dependent resources don't get reconciled at the same time.
+
+I only use it in a real emergency, like fixing one broken resource fast during an incident, and I always follow it up with a full, untargeted `apply` right after to bring everything back in sync.
 
 </details>
 
@@ -73,7 +95,11 @@ That's exactly what `terraform taint` is for, or on newer versions, `terraform a
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Workspaces share the same backend and the same code, they just swap out a variable, which sounds simple but makes it easy to accidentally run against the wrong environment if you forget which workspace you're on. In my experience, separate directories with separate backends and separate state files are much safer for real environments like prod, because the isolation is structural, not just a flag you have to remember to check. I'd only use workspaces for short-lived, throwaway environments, like a per-feature-branch preview stack.
+Workspaces share the same backend and the same code, they just swap out a variable, which sounds simple but makes it easy to accidentally run against the wrong environment if you forget which workspace you're on.
+
+In my experience, separate directories with separate backends and separate state files are much safer for real environments like prod, because the isolation is structural, not just a flag you have to remember to check.
+
+I'd only use workspaces for short-lived, throwaway environments, like a per-feature-branch preview stack.
 
 </details>
 
@@ -84,7 +110,13 @@ Workspaces share the same backend and the same code, they just swap out a variab
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-This happens when provider versions aren't pinned tightly, so CI just pulls in whatever's newest at apply time. I always pin exact provider versions in the `required_providers` block, and commit the `.terraform.lock.hcl` file to Git, so every environment resolves the exact same version. Upgrades are a deliberate, reviewed step — bump the version, run `plan` in a non-prod environment first, and check the diff carefully before it ever touches prod.
+This happens when provider versions aren't pinned tightly, so CI just pulls in whatever's newest at apply time.
+
+I always pin exact provider versions in the `required_providers` block, and commit the `.terraform.lock.hcl` file to Git, so every environment resolves the exact same version.
+
+**Pin exact version in `required_providers` → commit the lock file → bump version on a branch → test in non-prod → review diff → merge.**
+
+Upgrades are a deliberate, reviewed step — bump the version, run `plan` in a non-prod environment first, and check the diff carefully before it ever touches prod.
 
 </details>
 
@@ -95,7 +127,13 @@ This happens when provider versions aren't pinned tightly, so CI just pulls in w
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-A giant state file is almost always a sign the stack needs to be split up. Every `plan` has to refresh every resource in that file, so the bigger it gets, the slower everything gets, even for tiny changes. I break it into smaller, logically separate stacks — like network, compute, and data — each with its own state file, connected through `terraform_remote_state` where needed. That keeps each `plan` fast and also shrinks the blast radius of any one change.
+A giant state file is almost always a sign the stack needs to be split up.
+
+Every `plan` has to refresh every resource in that file, so the bigger it gets, the slower everything gets, even for tiny changes.
+
+I break it into smaller, logically separate stacks — like network, compute, and data — each with its own state file, connected through `terraform_remote_state` where needed.
+
+That keeps each `plan` fast and also shrinks the blast radius of any one change.
 
 </details>
 
@@ -106,7 +144,11 @@ A giant state file is almost always a sign the stack needs to be split up. Every
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Terraform builds a dependency graph from your code, and a true circular reference, like A needing B's output and B needing A's output, just can't be resolved automatically. Usually this means the resources are genuinely too tightly coupled and need to be restructured, or one side of the dependency can be broken using a separate resource, like an attachment resource instead of an inline reference. I look at the real relationship first, since forcing it with tricks like `depends_on` alone doesn't fix a genuine cycle.
+Terraform builds a dependency graph from your code, and a true circular reference, like A needing B's output and B needing A's output, just can't be resolved automatically.
+
+Usually this means the resources are genuinely too tightly coupled and need to be restructured, or one side of the dependency can be broken using a separate resource, like an attachment resource instead of an inline reference.
+
+I look at the real relationship first, since forcing it with tricks like `depends_on` alone doesn't fix a genuine cycle.
 
 </details>
 
@@ -117,7 +159,13 @@ Terraform builds a dependency graph from your code, and a true circular referenc
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I don't rely on someone catching it in a manual review, since that's easy to miss. I run a policy-as-code tool, like `tfsec`, `checkov`, or Sentinel if we're on Terraform Cloud, as a required step in the pipeline before `plan` even gets approved. If it flags a violation, the pipeline just fails outright and blocks the merge. That way the check is automatic and consistent, not dependent on someone remembering to look for it.
+I don't rely on someone catching it in a manual review, since that's easy to miss.
+
+I run a policy-as-code tool, like `tfsec`, `checkov`, or Sentinel if we're on Terraform Cloud, as a required step in the pipeline before `plan` even gets approved.
+
+**Plan is generated → policy-as-code scan runs → violation found → pipeline fails and blocks the merge → no violation → plan proceeds to review.**
+
+If it flags a violation, the pipeline just fails outright and blocks the merge. That way the check is automatic and consistent, not dependent on someone remembering to look for it.
 
 </details>
 
@@ -128,7 +176,13 @@ I don't rely on someone catching it in a manual review, since that's easy to mis
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I never hardcode a token in `.terraformrc` or commit it anywhere. Instead, CI pulls a short-lived credential at runtime, usually through the same OIDC-based role assumption we use for AWS access, and writes it into the CLI config just for that run. The token only exists for the length of the pipeline job and is scoped to read access on the registry, nothing more. That way there's no long-lived secret sitting around that could leak.
+I never hardcode a token in `.terraformrc` or commit it anywhere.
+
+Instead, CI pulls a short-lived credential at runtime, usually through the same OIDC-based role assumption we use for AWS access, and writes it into the CLI config just for that run.
+
+The token only exists for the length of the pipeline job and is scoped to read access on the registry, nothing more.
+
+That way there's no long-lived secret sitting around that could leak.
 
 </details>
 
