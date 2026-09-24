@@ -1,80 +1,40 @@
 # Senior DevOps Interview Questions: Linux
 
-## Q1. How do you systematically troubleshoot network connectivity issues at the Linux host and container level?
+### Q: How do you systematically troubleshoot network connectivity issues at the Linux host and container level?
 
-### Answer
-Troubleshooting Linux host and container network connectivity involves systematically testing network layers from physical interfaces up to DNS resolution. On the host level, inspect interface status (`ip addr`, `ip link`), routing table configurations (`ip route`), and listening sockets (`ss -tulpn`). Test ICMP layer connectivity (`ping 8.8.8.8`) to verify IP connectivity, followed by DNS resolution tests (`dig google.com` or `nslookup`). At the container level, inspect network namespaces, bridge devices (`docker network inspect bridge`), and IPTables NAT forwarding rules (`iptables -L -n -v`).
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
 
-### Interview Answer
-"I troubleshoot systematically bottom-up. First, I test host external connectivity using `ping 8.8.8.8` to rule out upstream firewall issues, followed by `dig google.com` to check DNS resolution in `/etc/resolv.conf`. Next, I step into the container using `docker exec` or `busybox` debug containers to ping the host bridge gateway. If host connectivity works but the container fails, I check IPTables IP forwarding (`net.ipv4.ip_forward = 1`) and verify that Docker bridge subnet routing rules aren't being blocked by host firewalls like UFW or firewalld."
+I troubleshoot this bottom-up, host first, then container. First I check the host's own external connectivity with `ping 8.8.8.8` — if that fails, it's an upstream or firewall issue that has nothing to do with containers yet. Then `dig google.com` to check whether DNS resolution itself is the problem, separate from raw IP connectivity, since those are two genuinely different failure modes.
 
-### Practical Example
-Troubleshooting container internet loss:
-1. Check host internet: `ping -c 2 8.8.8.8` (Success)
-2. Check host IP forwarding: `sysctl net.ipv4.ip_forward` (Ensure value is `1`)
-3. Inspect container IP and Gateway: `docker exec -it app_container ip route`
-4. Inspect host IPTables forwarding rules: `iptables -t nat -L -n -v`
-5. Restart Docker daemon to repair broken bridge interface bindings: `systemctl restart docker`
+If the host's fine, I exec into the container and repeat the same test — ping the raw IP first, then the domain. If IP ping works but domain ping fails, that's a container-level DNS issue, usually something in `/etc/resolv.conf`. If even the IP ping fails from inside the container, I check whether the host actually has IP forwarding enabled with `sysctl net.ipv4.ip_forward` — it needs to read `1` — and then inspect the IPTables NAT table with `iptables -t nat -L -n -v` to see if Docker's forwarding rules are actually present. If a firewall reload wiped those rules out, `systemctl restart docker` forces Docker to recreate its bridge network and repopulate them, which is usually the actual fix in that scenario.
 
-### Follow-up Questions
-* What is the role of `net.ipv4.ip_forward` in Linux routing between network interfaces?
-* How do you inspect listening ports and established sockets using `ss` versus `netstat`?
-* How does `/etc/resolv.conf` handle DNS search domains inside Kubernetes pods?
-
-### Key Points
-* Isolate host-level network failure before diagnosing container-level network issues.
-* Verify Linux kernel packet forwarding (`net.ipv4.ip_forward = 1`).
-* Check IPTables NAT rules and bridge interface health when containers lose outbound access.
+</details>
 
 ---
 
-## Q2. How do Linux kernel Namespaces, Cgroups, and Capabilities isolate container processes on a host machine?
+### Q: How do Linux kernel Namespaces, Cgroups, and Capabilities isolate container processes on a host machine?
 
-### Answer
-Linux containers are not full virtual machines; they are isolated Linux processes governed by three kernel primitives: Namespaces, Control Groups (Cgroups), and Capabilities. **Namespaces** isolate what a process can *see*—providing virtualized views of process IDs (`pid`), networking (`net`), mount points (`mnt`), hostnames (`uts`), and user IDs (`user`). **Cgroups** limit and measure what a process can *use*—imposing resource caps on CPU, RAM, Disk I/O, and Network. **Capabilities** break down root privileges into distinct fine-grained units (e.g., `CAP_NET_ADMIN`, `CAP_SYS_ADMIN`), allowing dropping unneeded root powers.
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
 
-### Interview Answer
-"Containers are fundamentally just Linux processes isolated by kernel features. Namespaces provide visibility isolation so a container process only sees its own PID tree, network interfaces, and mounts. Cgroups enforce resource quotas, preventing a buggy container from consuming 100% of the host CPU or memory and triggering OOM kills across other processes. Finally, Linux Capabilities decompose the monolithic root user into granular permissions, letting us restrict kernel calls even if the process runs as UID 0."
+Containers aren't virtual machines, they're just regular Linux processes wrapped in three kernel features. **Namespaces** control what a process can actually *see* — its own PID tree, its own network interfaces, its own mounts — so a process inside a container has no visibility into the host's real process list or the host's real network. **Cgroups** control what a process can *use* — CPU, memory, disk I/O — so a runaway container can't just consume the entire host and take down every other workload on it with an OOM cascade.
 
-### Practical Example
-* **Cgroups in action**: Setting Docker memory limits `--memory="512m"` writes restrictions directly to `/sys/fs/cgroup/memory/docker/<container_id>/memory.limit_in_bytes`.
-* **Namespaces in action**: Running `ps aux` inside a container shows PID 1, while running `ps aux` on the host machine shows the container process running under its real host PID.
+**Capabilities** are the third piece — they break the monolithic root user down into individual permissions, like `CAP_NET_ADMIN` or `CAP_SYS_ADMIN`, so even a process technically running as UID 0 inside the container can be stripped of the specific kernel powers it doesn't actually need. In practice, setting `--memory="512m"` on a container writes that limit directly into the cgroup filesystem, something like `/sys/fs/cgroup/memory/docker/<container_id>/memory.limit_in_bytes`, and running `ps aux` inside the container shows your process as PID 1, while the exact same process shows up under its real, much higher PID on the host — that's the namespace doing its job.
 
-### Follow-up Questions
-* What happens when a container exceeds its Cgroup memory limit versus its CPU limit?
-* How does Cgroups v2 improve upon resource management compared to Cgroups v1?
-* How do `pid` namespaces enable sharing process trees between pause containers and application containers?
-
-### Key Points
-* Namespaces isolate process visibility (`pid`, `net`, `mnt`, `uts`, `user`).
-* Cgroups restrict and account for system resource usage (CPU, RAM, I/O).
-* Capabilities divide root privileges into granular operational permissions.
+</details>
 
 ---
 
-## Q3. How do you inspect and manage container root user execution and drop Linux capabilities for host security?
+### Q: How do you inspect and manage container root user execution and drop Linux capabilities for host security?
 
-### Answer
-By default, processes inside Docker containers run with elevated root privileges and retain a default set of Linux capabilities. If a container process is compromised, an attacker retaining capabilities like `CAP_SYS_ADMIN` or `CAP_NET_ADMIN` can manipulate kernel network interfaces, mount host file systems, or break out to the host. To secure host systems, containers should run under non-root UIDs, use read-only root filesystems, and drop default kernel capabilities via CLI flags (`--cap-drop=ALL`) or container security manifests.
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
 
-### Interview Answer
-"To prevent privilege escalation and container breakout attacks, I strictly avoid running containerized processes as root. In Dockerfiles, I explicitly create non-root service accounts. At container launch, I pass `--cap-drop=ALL` to strip away all kernel capabilities, then selectively add back only what's explicitly needed, such as `--cap-add=NET_BIND_SERVICE` for web servers binding to port 80/443. This adheres to the security principle of least privilege."
+By default, containers run as root and hold onto a default set of Linux capabilities, and if that container ever gets compromised, an attacker with something like `CAP_SYS_ADMIN` can mount host filesystems or manipulate network interfaces — that's a real path to breaking out to the host, not just staying contained. So I avoid running as root in the first place wherever possible, and I strip capabilities aggressively as a second layer of defense.
 
-### Practical Example
-Inspecting Linux capabilities of a process:
-`getpcaps <PID>`
-Executing a container dropping all capabilities except low-port network binding:
-`docker run -d --name secure-web --cap-drop=ALL --cap-add=NET_BIND_SERVICE -p 80:80 nginx`
+At launch, I pass `--cap-drop=ALL` to remove every default capability, and then add back only the one thing that's actually needed — for a web server that has to bind to port 80 or 443, that's `--cap-add=NET_BIND_SERVICE`, nothing more: `docker run -d --name secure-web --cap-drop=ALL --cap-add=NET_BIND_SERVICE -p 80:80 nginx`. If I need to check what capabilities a running process actually has, `getpcaps <PID>` shows exactly that. This is straight-up least privilege applied at the container layer, and it's a cheap thing to get right that meaningfully shrinks the blast radius if something does go wrong.
 
-### Follow-up Questions
-* What security risks arise if a container mounts `/var/run/docker.sock` as root?
-* How do AppArmor and SELinux profiles add an extra layer of mandatory access control (MAC) to containers?
-* What is `readOnlyRootFilesystem` in Kubernetes pod security contexts and why is it recommended?
-
-### Key Points
-* Default container root processes retain dangerous Linux kernel capabilities.
-* Always drop all capabilities (`--cap-drop=ALL`) and selectively re-add mandatory ones.
-* Running non-root users combined with capability stripping prevents container breakout attacks.
-
+</details>
 
 ---

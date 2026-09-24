@@ -1,127 +1,52 @@
 # Senior DevOps Interview Questions: Kubernetes / EKS
 
-## Q1. How do Kubernetes Deployments execute zero-downtime rolling updates and rollbacks?
+### Q: How do Kubernetes Deployments execute zero-downtime rolling updates and rollbacks?
 
-### Answer
-Kubernetes Deployments manage application updates declaratively using ReplicaSets. During a rolling update, the Deployment controller creates a new ReplicaSet running the updated container image and gradually scales up its pod replica count while simultaneously scaling down the old ReplicaSet. The rate of pod replacement is controlled by `maxSurge` (how many pods can exist above the desired count) and `maxUnavailable` (how many pods can be offline during the update). If deployment health checks fail, `kubectl rollout undo deployment/<name>` instantly rolls back traffic to the previous ReplicaSet.
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
 
-### Interview Answer
-"Deployments achieve zero downtime by using `maxSurge` and `maxUnavailable` strategy parameters. When I update an image tag, Kubernetes provisions a new ReplicaSet and spins up new pods. Kubernetes waits for new pods to pass readiness probes before adding them to Service endpoint slices and terminating old pods in parallel. If errors occur mid-rollout, I run `kubectl rollout undo` to immediately shift traffic back to the stable old ReplicaSet."
+Deployments get zero-downtime rollouts through two knobs — `maxSurge`, which controls how many extra pods can exist above the desired count during the update, and `maxUnavailable`, which controls how many can be offline at once. When I push a new image tag, Kubernetes spins up a new ReplicaSet, and new pods only get added to the Service's endpoints once they actually pass their readiness probe — old pods get scaled down in parallel as new ones become ready.
 
-### Practical Example
-Deployment strategy definition:
-```yaml
-spec:
-  replicas: 10
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 25%        # Up to 13 pods during update
-      maxUnavailable: 0    # Ensures 100% current capacity remains active
-```
-Rollback execution command:
-`kubectl rollout undo deployment/web-app --to-revision=2`
+For something where I really can't afford any capacity dip, I'll set `maxSurge: 25%` and `maxUnavailable: 0`, so at 10 replicas it can burst up to 13 pods during the rollout but never drops below the original 10 healthy ones. If something goes wrong mid-rollout, `kubectl rollout undo deployment/web-app --to-revision=2` shifts traffic straight back to the last stable ReplicaSet, basically instantly, since that old ReplicaSet's pods are just scaled back up. None of this works, though, if the readiness probes aren't actually configured to reflect real app health — that's the piece that makes the whole mechanism trustworthy.
 
-### Follow-up Questions
-* Why must readiness probes be configured properly for zero-downtime rolling updates to succeed?
-* What is the difference between `maxSurge` expressed as a percentage versus an absolute integer?
-* How does `kubectl rollout status` help automate deployment validation in CI/CD pipelines?
-
-### Key Points
-* Rolling updates scale new ReplicaSets up while scaling old ReplicaSets down incrementally.
-* `maxUnavailable: 0` ensures existing application capacity is never reduced during updates.
-* Rollbacks revert traffic instantaneously by re-scaling previous ReplicaSets.
+</details>
 
 ---
 
-## Q2. How do Pod Disruption Budgets (PDB) handle voluntary disruptions during cluster maintenance?
+### Q: How do Pod Disruption Budgets (PDB) handle voluntary disruptions during cluster maintenance?
 
-### Answer
-A Pod Disruption Budget (PDB) limits the number of pods of a replicated application that can be down simultaneously during voluntary disruptions—such as node draining, cluster upgrades, or cluster autoscaler node scale-downs. Unlike involuntary disruptions (hardware crashes or network partitions), voluntary disruptions interact with the Kubernetes Eviction API. The Eviction API checks the PDB rules (`minAvailable` or `maxUnavailable`) before allowing a node drain operation to evict pods, preventing accidental application outages.
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
 
-### Interview Answer
-"Voluntary disruptions occur when admins drain nodes for OS patching or EKS cluster upgrades. Without a PDB, draining a node might evict all running instances of an application at once. By defining a PDB with `minAvailable: 80%` or `minAvailable: 2`, the Kubernetes Eviction API blocks node draining until replacement pods are running on other nodes, guaranteeing that application availability SLAs remain intact."
+A PDB protects against *voluntary* disruptions specifically — things like draining a node for an OS patch or a cluster upgrade — not against a hardware crash, which is involuntary and a PDB can't do anything about that. Without a PDB in place, draining a node could evict every single running replica of an app at once if they all happen to be scheduled there.
 
-### Practical Example
-PDB specification ensuring at least 2 replicas remain active:
-```yaml
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: app-pdb
-spec:
-  minAvailable: 2
-  selector:
-    matchLabels:
-      app: web-service
-```
+I set something like `minAvailable: 2` on a PDB tied to the app's label selector, and that plugs directly into the Kubernetes Eviction API — when someone tries to drain a node, the API checks the PDB first and simply blocks the eviction until enough replacement pods are healthy elsewhere to keep at least 2 available. It's a real, enforced guarantee, not just a suggestion. One thing I always double check — a single-replica deployment with `minAvailable: 1` will actually block a drain indefinitely, since there's no way to satisfy the budget without a second replica to fall back on, so PDBs only really make sense once you've got redundancy to protect.
 
-### Follow-up Questions
-* What is the critical difference between voluntary and involuntary disruptions?
-* What happens if a node drain command is executed on a single-replica deployment with `minAvailable: 1`?
-* How does Cluster Autoscaler interact with Pod Disruption Budgets when scaling down nodes?
-
-### Key Points
-* PDBs protect applications specifically against voluntary cluster maintenance disruptions.
-* The Eviction API enforces PDB rules (`minAvailable` / `maxUnavailable`) before terminating pods.
-* PDBs do not prevent outages caused by involuntary hardware failures or kernel crashes.
+</details>
 
 ---
 
-## Q3. How do StatefulSets differ from Deployments when managing stateful workloads requiring persistent storage?
+### Q: How do StatefulSets differ from Deployments when managing stateful workloads requiring persistent storage?
 
-### Answer
-Deployments manage stateless pods with interchangeable identities and random pod names (`app-75bdf48447-x9z2l`). In contrast, StatefulSets manage stateful workloads (like databases, Zookeeper, or Kafka) requiring unique network identities, ordered deployment and scaling, and sticky persistent storage. Each pod in a StatefulSet receives a deterministic ordinal index (`app-0`, `app-1`), a stable Headless Service DNS hostname, and a dedicated PersistentVolumeClaim (PVC) auto-provisioned via `volumeClaimTemplates` that persists across pod reschedules.
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
 
-### Interview Answer
-"Stateless apps use Deployments because any pod can replace any other. For databases like PostgreSQL or Elasticsearch, I use StatefulSets because they require stable identities and dedicated storage. StatefulSets create pods sequentially (`db-0`, `db-1`) with deterministic DNS names, and attach dedicated PVCs using `volumeClaimTemplates`. If `db-1` crashes and reschedules onto another node, Kubernetes reattaches the exact same persistent storage volume to maintain data continuity."
+Deployments are built for stateless apps — pods get random names, any replica is interchangeable with any other, and that's exactly what you want when nothing needs a stable identity. For something like Postgres or Elasticsearch, I use a StatefulSet instead, because those need a stable identity and dedicated storage that follows the pod around.
 
-### Practical Example
-StatefulSet `volumeClaimTemplates` snippet:
-```yaml
-spec:
-  serviceName: "postgres"
-  replicas: 3
-  template:
-    ...
-  volumeClaimTemplates:
-  - metadata:
-      name: data
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      resources:
-        requests:
-          storage: 50Gi
-```
+StatefulSets create pods with deterministic names — `db-0`, `db-1` — in order, each with its own stable DNS hostname through a headless Service, and each gets its own PersistentVolumeClaim auto-provisioned through `volumeClaimTemplates`, requesting something like 50Gi per pod. If `db-1` crashes and gets rescheduled onto a different node, Kubernetes reattaches that exact same PVC, so the data picks up right where it left off — no volume mix-up between replicas. Worth knowing too — deleting or scaling down a StatefulSet doesn't automatically delete the underlying PVCs, they stick around on purpose, which is exactly what you want, but it does mean cleanup is a deliberate, separate step if you actually want that storage gone.
 
-### Follow-up Questions
-* Why do StatefulSets require a Headless Service (`clusterIP: None`) for network identity?
-* What happens to PersistentVolumeClaims when a StatefulSet is scaled down or deleted?
-* How does the `OrderedReady` pod management policy differ from `Parallel` in StatefulSets?
-
-### Key Points
-* StatefulSets provide deterministic pod naming (`app-0`), stable DNS, and sequential rollout.
-* `volumeClaimTemplates` auto-provision dedicated PVCs bound to specific pod ordinals.
-* Deleting or scaling down a StatefulSet does not automatically delete underlying PVCs/PVs.
+</details>
 
 ---
 
-## Q4. How do you enforce resource isolation and multi-tenancy using Namespaces, ResourceQuotas, and RBAC?
+### Q: How do you enforce resource isolation and multi-tenancy using Namespaces, ResourceQuotas, and RBAC?
 
-### Answer
-Kubernetes multi-tenancy partitions a single physical cluster into isolated virtual environments using Namespaces. Resource isolation is enforced by defining `ResourceQuota` objects per namespace to cap total CPU, Memory, Storage, and Pod counts, preventing a single tenant from monopolizing cluster hardware. `LimitRange` objects set default/max CPU and memory requests and limits for individual containers. Access control is enforced via Role-Based Access Control (RBAC), binding Roles/ClusterRoles to users or ServiceAccounts to restrict API operations.
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
 
-### Interview Answer
-"To build secure multi-tenancy, I isolate teams into dedicated Namespaces. I apply a `ResourceQuota` to each namespace to hard-cap aggregate CPU and RAM consumption, and a `LimitRange` to enforce default container requests and limits. Finally, I write fine-grained RBAC policies—binding developers to namespace-scoped `Roles` rather than `ClusterRoles`—ensuring they can only view and manage workloads within their designated team namespace."
+To build real multi-tenancy on a shared cluster, I start by isolating each team into its own Namespace, then apply a `ResourceQuota` to hard-cap what that namespace can consume in aggregate — CPU, memory, and pod count — so one noisy team can't starve everyone else on the same hardware. Something like:
 
-### Practical Example
-Namespace `ResourceQuota` specification:
 ```yaml
-apiVersion: v1
-kind: ResourceQuota
-metadata:
-  name: team-alpha-quota
-  namespace: team-alpha
 spec:
   hard:
     requests.cpu: "4"
@@ -131,38 +56,21 @@ spec:
     pods: "20"
 ```
 
-### Follow-up Questions
-* What is the difference between a `RoleBinding` and a `ClusterRoleBinding` in Kubernetes RBAC?
-* How do NetworkPolicies complement Namespaces to enforce network-level tenant isolation?
-* What happens if a developer tries to deploy a pod without specifying resource requests in a namespace with a ResourceQuota?
+On top of the quota, a `LimitRange` sets sane default requests and limits for individual containers that don't specify their own, so nobody accidentally deploys an unbounded pod that eats the whole quota by itself. And then access is locked down with RBAC — I bind developers to namespace-scoped `Roles`, never `ClusterRoles`, so someone on team-alpha genuinely cannot see or touch workloads sitting in team-beta's namespace, even by accident.
 
-### Key Points
-* Namespaces create logical virtual cluster boundaries for resource isolation.
-* `ResourceQuota` caps aggregate namespace resource usage; `LimitRange` enforces container-level defaults.
-* RBAC `Roles` restrict tenant actions strictly to their assigned namespace boundaries.
+</details>
 
 ---
 
-## Q5. How do Custom Controllers, CRDs, and the Sidecar pattern extend Kubernetes core functionality?
+### Q: How do Custom Controllers, CRDs, and the Sidecar pattern extend Kubernetes core functionality?
 
-### Answer
-Kubernetes extensibility rests on Custom Resource Definitions (CRDs) and the Operator/Custom Controller pattern. A CRD registers new custom API object types (e.g., `VirtualService` or `CertManager`) with the API server. A Custom Controller continuously runs a reconciliation loop watching the custom resources, taking operational actions to align current state with desired state. The Sidecar pattern runs a secondary container inside the same pod (sharing localhost network and storage) to enhance the main app container—e.g., Envoy proxies in Service Meshes (Istio) or log shippers (Fluentbit).
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
 
-### Interview Answer
-"CRDs allow us to define custom declarative APIs beyond built-in objects like Pods or Services. A Custom Controller watches these CRDs in a control loop, executing custom logic to handle operations—like auto-provisioning database instances. The Sidecar pattern injects a helper container alongside the main app in the same pod. For instance, Istio uses mutating admission webhooks to inject an Envoy sidecar proxy into app pods, enabling mTLS and traffic management transparently without modifying app code."
+A Custom Resource Definition registers a brand-new API type with the Kubernetes API server — something like a `VirtualService` object that isn't part of core Kubernetes at all. On its own, a CRD is just a schema. What actually makes it do something is a Custom Controller running a reconciliation loop that watches those objects and takes real action to bring the cluster's actual state in line with what's declared.
 
-### Practical Example
-In Istio, when a deployment manifest is submitted, a Mutating Admission Webhook intercepts the request and injects an Envoy proxy sidecar container into the pod spec alongside the application container. Both containers share the pod's network namespace (`localhost`) via a Pause container.
+The Sidecar pattern is a different extension mechanism — it runs a second container inside the same pod as your app, sharing the same network namespace over `localhost` and the same volumes. Istio is the classic example — when a deployment gets submitted, a Mutating Admission Webhook intercepts it and injects an Envoy proxy container right into the pod spec, without the application code ever needing to know a proxy is even there. Both containers share networking through a shared Pause container under the hood, which is what makes `localhost` communication between them actually work.
 
-### Follow-up Questions
-* What role does the Pause container play in sharing networking across containers within a single pod?
-* What is the difference between a Mutating Admission Webhook and a Validating Admission Webhook?
-* How does the reconciliation loop (`Reconcile()`) in Custom Controllers maintain state alignment?
-
-### Key Points
-* CRDs register custom schema definitions with the Kubernetes API server.
-* Custom Controllers execute reconciliation loops to manage custom resource states.
-* Sidecars run alongside main application containers, sharing `localhost` networking and volumes.
-
+</details>
 
 ---
