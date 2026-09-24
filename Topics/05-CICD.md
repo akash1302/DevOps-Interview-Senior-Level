@@ -87,3 +87,16 @@ I make sure every deployment is tied to one clear version, so rolling back just 
 </details>
 
 ---
+
+### Q: You do a blue/green deployment, the new environment passes its health checks and gets traffic, but a few minutes later 5xx errors spike and CPU is high on the new side. How do you roll back?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+This is exactly why blue/green is worth the setup cost — the old environment is still sitting there, fully working, so I don't have to rebuild anything to recover. My first move is just triggering the rollback, which sends traffic straight back to the old, healthy environment. That's usually done in a couple minutes, and it stops the user-facing pain immediately.
+
+Only once traffic is stable do I actually go dig into why the new version failed. I'd pull the logs from the failed instances and look for real errors — maybe a new call to some other service that's failing, or a bad config that only shows up under real traffic. I'd also take a hard look at what the health check was actually checking — a lot of the time it's just confirming the web server responds, not that the app is actually working end to end. A better health check, one that actually tests a real internal dependency, would've caught this before the full switch happened. Once the real bug's fixed, I retry the deployment, I don't just push the same broken version again.
+
+</details>
+
+---

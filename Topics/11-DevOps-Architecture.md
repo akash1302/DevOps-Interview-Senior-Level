@@ -110,6 +110,19 @@ Before building anything, I get two real numbers from the business — how long 
 
 ---
 
+### Q: The business gives you a hard target of 15 minutes maximum downtime and 5 minutes maximum data loss for the main e-commerce app. How would you actually architect that?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+Those numbers are tight enough that a cold standby in a second region won't work — waking up a cold environment alone can eat most of that 15-minute budget. So I'd run the app live in two regions at the same time, not one region with a backup sitting idle. Under normal conditions, one region handles the main traffic, but the second region is already running and ready, not something we're starting from scratch during an incident.
+
+The database is really the hard part here. I'd run a replica of the main database in the second region, continuously catching up, so it's never more than a few minutes behind — that's what actually gets us under the 5-minute data loss target. For things like uploaded files, I'd keep them synced between regions automatically. For fast-changing data, like user sessions, I'd use a database built to replicate across regions in near real time, since a slower replication method wouldn't be fast enough for that piece. For the actual failover, I wouldn't rely on someone noticing and reacting by hand — I'd set up automatic health checks that detect the primary region failing and switch traffic to the second region on their own, since manual failover alone almost never hits a 15-minute target once you include the time for someone to notice, get paged, and actually respond.
+
+</details>
+
+---
+
 ### Q: How do you approach designing infrastructure as code so that a growing platform team doesn't end up with messy, duplicated code everywhere?
 
 <details>

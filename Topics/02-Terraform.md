@@ -87,3 +87,16 @@ A giant state file is usually a sign that too much infrastructure is being manag
 </details>
 
 ---
+
+### Q: Your Terraform pipeline fails because `terraform plan` can't get a lock on the state file — it says another process already has it. How do you fix this safely?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+The lock exists on purpose, to stop two applies from running at the same time and corrupting the state, so I never just force past it without checking first. My first step is finding out who or what actually holds the lock right now. I check the DynamoDB lock table — the entry there usually shows which pipeline run or machine grabbed it.
+
+Then I go check if that pipeline job is actually still running, or if it crashed or got cancelled without cleaning up after itself. If it's genuinely dead, I can safely force-unlock using the lock ID shown in the error. But I have to be completely sure that job isn't actually mid-apply somewhere, because force-unlocking while a real apply is running is exactly how you corrupt the state. If it turns out a teammate's job is holding it, I just message them first instead of touching anything. Longer term, the fix is making sure pipelines can't run in parallel against the same state in the first place, so this doesn't keep happening.
+
+</details>
+
+---

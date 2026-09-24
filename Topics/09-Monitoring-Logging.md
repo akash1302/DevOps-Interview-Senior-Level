@@ -65,3 +65,18 @@ I never leave logs sitting only on the individual server that created them, sinc
 </details>
 
 ---
+
+### Q: Your app on AWS Fargate was sending logs to CloudWatch just fine, and then logs suddenly stopped, even though the app itself still looks healthy. How do you troubleshoot this?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+Since the app itself is fine, I don't waste time debugging the application code — this is almost always a permissions or config problem around logging, not the app breaking. The first thing I check is the task's execution role, since it needs specific permission to create log streams and write log events. If someone touched that IAM policy recently, even by accident, that alone would explain logs just stopping cold.
+
+If the permissions check out, I go look at the task definition itself — is the logging driver actually set correctly, and is the log group name spelled right, since a typo there fails silently instead of throwing an obvious error. I'd also check if we've hit an account-level limit on CloudWatch, like too many log groups or too much data coming in. And if the task itself is failing to even start properly, I'd check the ECS service events directly, since those often show the real reason in plain language, like it failing to pull a secret it needs, which would explain both the missing logs and confirm it's a config issue, not the app.
+
+</details>
+
+---
+
+---

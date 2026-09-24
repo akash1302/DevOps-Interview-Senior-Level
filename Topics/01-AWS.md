@@ -87,3 +87,16 @@ I start by actually looking at what's being paid for, using AWS's own cost tools
 </details>
 
 ---
+
+### Q: Finance tells you the AWS bill jumped 300% compared to last month, and you're asked to find out why. Where do you actually start?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+I go straight to Cost Explorer first and group the spend by service, comparing this month against last month. That one view usually tells me immediately which service caused the jump — most of the time it's EC2, data transfer, or S3, so I don't waste time guessing across the whole account.
+
+If it's EC2, I check for things like old dev instances nobody shut down, or an Auto Scaling policy that's too aggressive and keeps way more capacity running than it needs. If it's S3, I check whether there's a flood of tiny objects driving up request costs, or whether the lifecycle rules that should be moving old data to cheaper storage actually failed silently. And if it's data transfer, that's usually the sneaky one — I'd check VPC Flow Logs for large transfers going out to the internet or across regions that shouldn't be happening. Once I find the actual resource, I tag it properly so it's easy to track going forward, and I set up budget alerts and cost anomaly detection, so next time this happens, we get a warning within a day, not a surprise a month later.
+
+</details>
+
+---

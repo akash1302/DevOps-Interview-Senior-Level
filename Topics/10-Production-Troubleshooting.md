@@ -65,3 +65,29 @@ I never let one slow or dead dependency block everything else. I set a strict ti
 </details>
 
 ---
+
+### Q: You get paged at 2 AM because CPU on your production EC2 web servers is stuck above 90%, and users are seeing timeouts. What's your step-by-step approach?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+My first move is always to stop the bleeding, not find the root cause. I'd bump up the desired capacity on the Auto Scaling Group right away, so new instances come up and spread the load while I actually investigate. That's a quick fix, not the real answer, but it buys time and gets users unblocked fast.
+
+While that's happening, I'm in CloudWatch checking CPU usage and whether instances are failing health checks. Then I connect into one of the bad instances — using Session Manager, so I don't need to mess with SSH keys — and run a live process monitor to see exactly what's eating the CPU. Is it the app itself, a stuck database connection, or something that shouldn't be running at all, like a crypto-miner from a break-in? I also check the app logs around the same time, to see if this lines up with a recent deploy or a real traffic spike. Depending on what I find, the fix might be killing a bad process, rolling back a recent release, or scaling the database — but the order is always the same: restore service first, then dig into why it happened.
+
+</details>
+
+---
+
+### Q: Your RDS Postgres database has been getting slower over time, with high CPU and slow reads. How do you find and fix the actual bottleneck?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+High CPU with slow reads usually means bad queries or missing indexes, not a broken database. So my first stop is RDS Performance Insights — it shows me exactly which queries are actually using up the database's time, ranked by load, instead of me guessing which one is the problem.
+
+Once I find the worst query, I run it through `EXPLAIN ANALYZE` to see how the database is actually executing it. Most of the time this shows a full table scan where an index should be doing the work instead. So the fix is usually adding an index on the right columns — but I'm careful not to overdo this, since every index also slows down writes a little. If the queries are already efficient and the load is just genuinely bigger than before, then it's not a query problem anymore, it's a sizing problem — I'd either scale up the instance or add a read replica to take some of the read traffic off the main database. I'd also turn on the slow query log, so the next time this happens, I've already got the data instead of starting from zero.
+
+</details>
+
+---

@@ -76,3 +76,16 @@ I test the connection itself first, separately from the app. If I can open a bas
 </details>
 
 ---
+
+### Q: Service A can't connect to Service B, both are ECS tasks in different private subnets, and both are confirmed running. How do you methodically find the problem?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+In AWS, this almost always comes down to one of four things — Security Groups, NACLs, route tables, or the app itself — so I check them in that order, starting with the most common culprit. First, Service B's Security Group needs an inbound rule that actually allows traffic from Service A's Security Group on the right port. I always reference the other security group directly in the rule, not a raw IP range, since IPs change but the group reference doesn't.
+
+Then I check Service A's outbound rule, to make sure it's actually allowed to send traffic to that port in the first place — people often only check inbound and forget outbound needs to allow it too. If both of those look fine, I check the NACLs on both subnets, since those need to allow the return traffic on the high port range, not just the main port, because NACLs don't automatically allow replies the way Security Groups do. If I've checked all of that and I'm still stuck, I'll use the VPC Reachability Analyzer — you give it the source and destination, and it walks the actual path and tells you exactly which rule is blocking it, instead of me checking each hop by hand.
+
+</details>
+
+---
