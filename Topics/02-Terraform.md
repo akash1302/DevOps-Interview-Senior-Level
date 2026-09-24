@@ -54,3 +54,36 @@ Secrets never go into the code, and never get saved in Git. If a value is sensit
 </details>
 
 ---
+
+### Q: What's the difference between `count` and `for_each` in Terraform, and why does it matter when resources change?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+`count` tracks resources by their position in a list, like the first one, second one, and so on. The problem is, if that list ever changes order, Terraform thinks a completely different resource is now sitting at that position, and it tries to delete and recreate things that didn't actually need to change. `for_each` tracks resources by a real key, like a name, instead of a position. So if the list order changes but the actual names stay the same, Terraform correctly leaves those resources alone. I default to `for_each` now for anything where the list of items might change over time.
+
+</details>
+
+---
+
+### Q: How do you safely upgrade a Terraform provider version without breaking existing infrastructure?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+I never let the provider version float freely — I pin it to a specific version, and I commit the lock file to Git, so everyone and every pipeline uses the exact same version. When I do want to upgrade, I bump the version in a branch, run it against a non-production environment first, and carefully read the plan output before applying anything. Some provider upgrades quietly change how a resource behaves, not just the version number, so I never assume an upgrade is safe just because it installed without an error.
+
+</details>
+
+---
+
+### Q: How do you handle a Terraform state file that's grown huge and makes every plan slow?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+A giant state file is usually a sign that too much infrastructure is being managed in one place. Every `plan` has to check every single resource in that file, so the bigger it gets, the slower everything gets, even for a tiny change. My fix is splitting it up — separate state files for separate layers, like networking, databases, and applications, each managed on its own. If one layer needs information from another, I read it through a safe, read-only reference, instead of putting everything in one giant file just for convenience.
+
+</details>
+
+---

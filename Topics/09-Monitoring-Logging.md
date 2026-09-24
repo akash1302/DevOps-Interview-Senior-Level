@@ -32,3 +32,36 @@ For a quick check, I run a command that shows live CPU and memory use for every 
 </details>
 
 ---
+
+### Q: What's the difference between an SLI, an SLO, and an SLA, and why does a platform team actually need all three?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+An SLI is just a real number you measure, like how many requests succeeded in the last hour. An SLO is the internal target you set for that number, like "99.9% of requests should succeed" — that's the goal the team actually works toward. An SLA is the promise made to the customer, usually with a real penalty attached if it's broken. I always set the SLO a bit stricter than the SLA, so the team gets an early warning and can react before we actually break the promise made to the customer, not after.
+
+</details>
+
+---
+
+### Q: How do you design alerting so the on-call engineer doesn't get woken up for things that don't actually matter?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+I only page a real person for things that need action right now, and would actually hurt the business if ignored — like the whole site being down. Anything that's just informational, or can wait until morning, goes to a dashboard or a non-urgent channel instead, never a phone alert. I also set alerts on trends, not just a single bad reading, since one slow request doesn't mean anything, but the error rate climbing steadily for ten minutes does. If the team starts ignoring alerts because there are too many false ones, that's a sign the alerting itself needs fixing, not a sign the team needs to try harder.
+
+</details>
+
+---
+
+### Q: How do you set up centralized logging for an application running across many servers or containers?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+I never leave logs sitting only on the individual server that created them, since that server might get replaced or deleted at any time, and the logs would just disappear with it. Instead, every server and container ships its logs out to one central place in real time. I also make sure logs are structured, not just plain free text, so I can actually search and filter them properly — like finding every log line for one specific request, across every service it touched, instead of manually reading through raw text files one at a time.
+
+</details>
+
+---

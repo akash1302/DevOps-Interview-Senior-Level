@@ -29,8 +29,9 @@ This README covers 14 core domains as one continuous reference (table of content
 | 08 | Security | [`Topics/08-Security.md`](./Topics/08-Security.md) |
 | 09 | Monitoring & Logging | [`Topics/09-Monitoring-Logging.md`](./Topics/09-Monitoring-Logging.md) |
 | 10 | Production Troubleshooting | [`Topics/10-Production-Troubleshooting.md`](./Topics/10-Production-Troubleshooting.md) |
+| 11 | DevOps Architecture | [`Topics/11-DevOps-Architecture.md`](./Topics/11-DevOps-Architecture.md) |
 
-Each topic file follows: **Question → Technical Answer → Interview Answer (verbatim) → Practical Example → Follow-up Questions → Key Points**.
+Each topic file uses plain-English, first-person candidate answers in `<details>` flashcards, same style as this README.
 
 | Day | Focus | File |
 |-----|-------|------|

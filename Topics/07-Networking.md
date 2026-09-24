@@ -43,3 +43,36 @@ A Site-to-Site VPN is an encrypted connection that still travels over the regula
 </details>
 
 ---
+
+### Q: What actually happens, step by step, when you type a website address into a browser and hit enter?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+First, the computer needs to turn that website name into a real address, so it asks a DNS server to look it up. Once it has the address, it opens a connection to the server at that address, usually over a secure connection, which involves a quick back-and-forth to agree on encryption before any real data moves. Then the browser actually sends the request for the page, the server sends back the response, and the browser starts showing it. If any one of these steps is slow — a slow DNS lookup, a slow secure connection setup, a slow server response — the whole page feels slow, so when I'm troubleshooting a "slow website," I check each of these steps separately instead of guessing which one is the problem.
+
+</details>
+
+---
+
+### Q: What's the difference between an Application Load Balancer and a Network Load Balancer, and when do you use each?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+An Application Load Balancer works at the web traffic level — it can actually look at the request, like the URL path, and route different paths to different backend services. That makes it a great fit for normal web apps and APIs. A Network Load Balancer works at a lower level — it just forwards raw connections, without looking inside them, which makes it extremely fast and able to handle a huge number of connections. I'd use a Network Load Balancer for something like a database proxy or a service needing a fixed IP address, and an Application Load Balancer for basically every normal web application.
+
+</details>
+
+---
+
+### Q: How do you troubleshoot when two servers can't talk to each other, and you're not sure if it's a network problem or an app problem?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+I test the connection itself first, separately from the app. If I can open a basic connection to the right port on the other server, then the network path is fine, and the problem is actually inside the application — maybe it's not listening correctly, or it's rejecting the request for its own reasons. If I can't even open a basic connection, then it really is a network issue, and I check the usual suspects in order — firewall rules on both ends, then the routing in between. Testing the raw connection first, before blaming the app or the network, saves a lot of time chasing the wrong thing.
+
+</details>
+
+---

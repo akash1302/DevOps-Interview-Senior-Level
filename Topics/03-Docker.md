@@ -54,3 +54,36 @@ I never run a full cleanup command blindly in production. It can delete images I
 </details>
 
 ---
+
+### Q: How does Docker's image layer caching work, and how do you write a Dockerfile that builds fast?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+Docker builds an image line by line, and it saves the result of each line as a layer. If a layer hasn't changed since the last build, Docker just reuses it instead of doing the work again. The trick to a fast build is ordering the Dockerfile so the parts that change the least come first, and the parts that change the most, like your actual app code, come last. So I copy over dependency files and install dependencies before I copy the rest of the source code. That way, changing one line of app code doesn't force Docker to redo the slow dependency install step every single time.
+
+</details>
+
+---
+
+### Q: How do you set CPU and memory limits for containers, and what happens if a container goes over them?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+I always set a memory limit on containers in production, never leave it unlimited. If a container tries to use more memory than its limit, Linux kills the process outright — that's actually the safer outcome, since it fails fast and gets restarted, instead of slowly using up all the memory on the whole machine and taking other containers down with it. CPU works differently — going over a CPU limit doesn't kill the container, it just gets slowed down and has to share the CPU more. So memory limits are about survival, and CPU limits are more about being a fair neighbor to other containers on the same machine.
+
+</details>
+
+---
+
+### Q: How do you handle logging for containers so logs don't fill up the disk and crash the host?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+By default, Docker just keeps writing container logs to a local file that can grow forever, and I've seen that fill up a disk and take down a whole host before. So I set a log size limit and a rotation policy on the Docker daemon, so old logs get deleted automatically once they hit a certain size. But really, in production, I don't rely on local log files at all — I ship logs straight out to a central logging system, so they're searchable in one place, and the local disk never becomes the single point of failure for logging.
+
+</details>
+
+---

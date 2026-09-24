@@ -54,3 +54,36 @@ I use a real version tag, like `v2.1.0`, to mark an actual release point in the 
 </details>
 
 ---
+
+### Q: How do you keep secrets, like API keys and passwords, safe inside a CI/CD pipeline?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+Secrets never sit in the pipeline config file itself, and never get printed in build logs. I store them in the CI tool's own secret storage, or better, pull them from a real secrets manager at run time, so the pipeline only ever holds a short-lived reference, not the actual value. I also make sure secrets used for one environment, like staging, can't be read by a pipeline running against a different environment, like production. And I turn on masking, so even if a secret accidentally gets printed somewhere, the actual value is hidden in the log output.
+
+</details>
+
+---
+
+### Q: How would you add automatic security scanning into a CI/CD pipeline without slowing developers down too much?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+I add scanning at two points. Code scanning runs early, right when a pull request opens, checking the source code itself for common mistakes and bad patterns — that's fast, so it doesn't slow anyone down. Then, after the build step, I scan the actual built image for known vulnerabilities. I only fail the pipeline on serious, high-severity issues at first, not every small warning, since blocking on everything just trains people to ignore the results. Once the team trusts the scanner and the noise is low, I tighten the rules over time.
+
+</details>
+
+---
+
+### Q: How do you design rollback so that a bad deployment can be undone quickly, without a lot of manual steps?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+I make sure every deployment is tied to one clear version, so rolling back just means redeploying the last known-good version, not trying to manually undo individual changes. I keep the previous version's artifact ready and available, not deleted right after a new deploy, so it's there instantly if needed. For the riskiest changes, I'll also add an automatic rollback trigger — if error rates spike right after a deploy, the pipeline rolls back on its own, instead of waiting for a person to notice and react, which is usually the slowest part of any incident.
+
+</details>
+
+---

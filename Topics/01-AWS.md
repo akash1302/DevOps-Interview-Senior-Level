@@ -54,3 +54,36 @@ By default, a private server reaches S3 through the NAT Gateway, and that costs 
 </details>
 
 ---
+
+### Q: What's the difference between RDS Multi-AZ and a Read Replica, and when would you use each?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+Multi-AZ is for staying up if something breaks. It keeps a live copy of the database in a second zone, and if the main one fails, AWS switches over to the copy automatically. You never actually query that second copy directly, it just sits ready as a backup. A Read Replica is different — it's for handling more traffic, not for backup. It's a separate copy you can actually send read queries to, so heavy reporting or read-heavy traffic doesn't slow down the main database. In a real setup, I usually use both together — Multi-AZ for safety, and one or more Read Replicas to spread out read traffic.
+
+</details>
+
+---
+
+### Q: How do you design IAM access for a growing company with many AWS accounts and many engineers?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+I never give engineers a personal AWS access key that sits around forever. Instead, I use AWS Organizations to keep separate accounts for each environment, like dev and prod, so a mistake in dev can't touch prod at all. For access, people log in once through a central identity system, and then assume a role that only lasts a short time, instead of having a permanent key. I also start every role with the least access it needs, and only add more if someone actually asks for it and it makes sense, instead of giving broad access by default and hoping nobody misuses it.
+
+</details>
+
+---
+
+### Q: How would you reduce a company's AWS bill without hurting performance or reliability?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+I start by actually looking at what's being paid for, using AWS's own cost tools, instead of guessing. A lot of savings come from easy wins first — deleting unused storage volumes, old snapshots nobody needs, and load balancers nobody's using anymore. Then I look at right-sizing — checking if servers are actually using the CPU and memory they're paying for, and downsizing the ones that aren't. For steady, predictable workloads, I'll buy savings plans or reserved capacity, since that's cheaper than paying full price all the time. I avoid cutting things that affect reliability just to save money — the goal is removing waste, not removing safety.
+
+</details>
+
+---

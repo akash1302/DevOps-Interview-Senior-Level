@@ -32,3 +32,36 @@ If the state file gets deleted, and we have versioning turned on for that storag
 </details>
 
 ---
+
+### Q: Production suddenly gets very slow, but nothing actually crashed. How do you find the cause under pressure?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+I don't start guessing right away, I check the basics first, in order. Is CPU or memory actually maxed out somewhere? Is the database slow, or is it the app itself? Is there a spike in traffic, or did traffic stay normal? I also check what changed recently, since a slowdown right after a deploy almost always points back to that deploy, and that's usually faster to confirm than digging through metrics from scratch. If I can't find the cause quickly and the deploy is the obvious suspect, I'll just roll back first and investigate the real cause after, since restoring the service matters more than proving what broke it in the moment.
+
+</details>
+
+---
+
+### Q: An application keeps losing its connection to the database under normal load. How do you find out why?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+This is almost always a connection pool problem, not a network problem, so I check that first. I look at how many connections the app is actually allowed to open, versus how many the database allows in total — if many copies of the app are all running at once, they can easily add up past what the database allows. I also check if connections are being closed properly after use, since a leak there means the pool slowly fills up over time and never has room for new requests. Only after ruling those out would I actually suspect the network itself.
+
+</details>
+
+---
+
+### Q: A third-party API your application depends on goes down. How do you stop that from taking your whole application down with it?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+I never let one slow or dead dependency block everything else. I set a strict timeout on any call to an outside service, so my app doesn't just sit there waiting forever. I also add a circuit breaker — after a certain number of failures in a row, the app stops even trying to call that service for a while, and fails fast instead, which protects the rest of the app from slowing down too. Wherever possible, I design the feature that depends on that API to degrade gracefully — like showing cached or default data — instead of the whole page failing just because one third-party service is having a bad day.
+
+</details>
+
+---

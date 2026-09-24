@@ -32,3 +32,36 @@ By default, a container runs as root and keeps a set of permissions it usually d
 </details>
 
 ---
+
+### Q: A server's disk is almost full and you don't know why. How do you find out what's actually using the space?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+I start at the top level and work my way down, instead of guessing. First, I check which disk or partition is actually full, since a server can have more than one. Then I check folder by folder, starting from the root, to see which directory is the biggest, and I keep going deeper into that one folder until I find the actual large files. Logs are the most common cause I run into — an app that's stuck in a loop can fill a log file with gigabytes of the same error message in a short time. Once I find the cause, I clean it up, but I also fix the actual reason it grew that big, like adding log rotation, so it doesn't just fill up again.
+
+</details>
+
+---
+
+### Q: How do you find out which process is using too much CPU or memory on a Linux server?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+I use a live process monitor first, which shows every running process sorted by CPU or memory use, updating in real time. That usually points straight at the problem process. Once I know which one it is, I look deeper — checking if it's actually doing real work, or if it's stuck, like waiting forever on something that's not responding. If it's a memory problem specifically, I check if the memory use keeps climbing over time and never comes back down, since that usually means the app has a real leak, not just normal heavy use.
+
+</details>
+
+---
+
+### Q: How do you make sure a script or service runs automatically every time a Linux server restarts?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+I don't rely on someone remembering to start it manually after a reboot. I set it up as a real system service, so the operating system itself manages starting it, restarting it if it crashes, and stopping it cleanly during shutdown. That also gives me proper logs and a simple way to check if it's actually running, instead of guessing. For something that just needs to run on a schedule, like a cleanup task every night, I use a scheduled job instead, which is simpler and doesn't need to run all the time in the background.
+
+</details>
+
+---

@@ -32,3 +32,36 @@ Nothing sensitive ever goes into code, and nothing ever gets saved in Git. Real 
 </details>
 
 ---
+
+### Q: How do you rotate secrets, like database passwords, without causing downtime for the application using them?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+I never rotate a secret by just replacing the old one instantly everywhere, since anything still holding the old value in memory would suddenly fail. Instead, I use a secrets manager that supports rotation properly — it creates a new password, updates the actual database to accept both the old and new one for a short window, and then the app picks up the new value on its next normal refresh. Once I'm sure nothing is still using the old one, it gets fully disabled. The key idea is overlap — both values work for a short time, so nothing breaks in the gap.
+
+</details>
+
+---
+
+### Q: What's the difference between encryption at rest and encryption in transit, and do you need both?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+Encryption at rest protects data while it's sitting still, like in a database or on a disk — if someone steals the physical drive, they can't read it. Encryption in transit protects data while it's moving, like between a browser and a server — if someone's listening on the network, they can't read it either. These cover two completely different risks, so yes, I always want both. Having one without the other still leaves a real gap — say, data safely encrypted on disk, but sent across the network in plain text where anyone watching the traffic could read it.
+
+</details>
+
+---
+
+### Q: What is the principle of least privilege, and how do you actually apply it in a real cloud environment, not just in theory?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+Least privilege means giving someone, or some service, only the exact access they need, and nothing more. In practice, that means I never start with broad, full access and plan to restrict it later — I start with almost nothing, and add specific permissions only when something actually needs them and asks for it. I also review access regularly, since permissions tend to pile up over time as people change roles, and nobody ever goes back to remove the old ones unless it's a habit, not a one-time cleanup.
+
+</details>
+
+---

@@ -54,3 +54,36 @@ A CRD lets you add a brand new type of object to Kubernetes, one that isn't buil
 </details>
 
 ---
+
+### Q: What's the difference between a Liveness Probe and a Readiness Probe, and what happens if you mix them up?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+A Readiness Probe tells Kubernetes whether a pod is ready to actually receive traffic right now. If it fails, the pod is just pulled out of the traffic list, but Kubernetes leaves it running, since it might recover on its own. A Liveness Probe is different — if it fails, Kubernetes assumes the app is stuck for good, and it kills and restarts the container. The mistake I see a lot is using the same check for both. If a slow but recovering app fails a Liveness Probe, Kubernetes keeps restarting it over and over, which just makes a slow problem into a much bigger outage.
+
+</details>
+
+---
+
+### Q: How does the Horizontal Pod Autoscaler work, and what do you need in place before it will actually work correctly?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+The Horizontal Pod Autoscaler watches a metric, usually CPU usage, and adds or removes pod copies to keep that metric near a target you set. But it only works if every pod already has a CPU or memory request set in its config — without that, the autoscaler has nothing real to measure against, and it just won't work properly. I also always set a minimum and a maximum number of copies, so it can't scale down to zero by accident during a quiet period, and it can't scale up forever and blow through the budget if something goes wrong.
+
+</details>
+
+---
+
+### Q: How do you plan and safely execute a Kubernetes cluster version upgrade in production?
+
+<details>
+<summary><b>🔍 View Candidate's Answer</b></summary>
+
+I never upgrade production first. I always test the new version on a non-production cluster running the same apps, and check what's changed or removed in that version, since Kubernetes does remove old features over time. For the real upgrade, I do the control plane first, since it can run a slightly newer version than the worker nodes for a short time. Then I upgrade the worker nodes in small groups, moving pods off each one safely before touching it, instead of upgrading everything at once. If something breaks partway through, only part of the cluster is affected, not all of it at once.
+
+</details>
+
+---
