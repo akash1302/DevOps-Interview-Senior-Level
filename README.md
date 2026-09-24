@@ -13,6 +13,33 @@ Quick, plain-English candidate answers — short and to the point, the way you'd
 
 ---
 
+## 📁 Repository Structure
+
+This README covers 14 core domains as one continuous reference (table of contents below). Beyond that, the repo has two more layers of prep material:
+
+| # | Topic | File |
+|---|-------|------|
+| 01 | AWS | [`Topics/01-AWS.md`](./Topics/01-AWS.md) |
+| 02 | Terraform | [`Topics/02-Terraform.md`](./Topics/02-Terraform.md) |
+| 03 | Docker | [`Topics/03-Docker.md`](./Topics/03-Docker.md) |
+| 04 | Kubernetes / EKS | [`Topics/04-Kubernetes-EKS.md`](./Topics/04-Kubernetes-EKS.md) |
+| 05 | CI/CD | [`Topics/05-CICD.md`](./Topics/05-CICD.md) |
+| 06 | Linux | [`Topics/06-Linux.md`](./Topics/06-Linux.md) |
+| 07 | Networking | [`Topics/07-Networking.md`](./Topics/07-Networking.md) |
+| 08 | Security | [`Topics/08-Security.md`](./Topics/08-Security.md) |
+| 09 | Monitoring & Logging | [`Topics/09-Monitoring-Logging.md`](./Topics/09-Monitoring-Logging.md) |
+| 10 | Production Troubleshooting | [`Topics/10-Production-Troubleshooting.md`](./Topics/10-Production-Troubleshooting.md) |
+
+Each topic file follows: **Question → Technical Answer → Interview Answer (verbatim) → Practical Example → Follow-up Questions → Key Points**.
+
+| Day | Focus | File |
+|-----|-------|------|
+| Day 1 | AWS VPC & Networking (production troubleshooting) | [`DevOps/DAY-1-AWS-VPC.md`](./DevOps/DAY-1-AWS-VPC.md) |
+| Day 2 | Kubernetes, Docker, CI/CD, AWS, SRE — principal-level deep dives | [`DevOps/DAY-2-PRINCIPAL-DEEPDIVE.md`](./DevOps/DAY-2-PRINCIPAL-DEEPDIVE.md) |
+| Day 3 | Terraform scenario-based questions | [`DevOps/DAY-3-TERRAFORM-SCENARIOS.md`](./DevOps/DAY-3-TERRAFORM-SCENARIOS.md) |
+
+---
+
 ## Table of Contents
 
 | # | Domain | # | Domain |
