@@ -1,4 +1,3 @@
-````markdown
 # 🚀 DAY 1 — AWS VPC & NETWORKING
 ## Senior DevOps / AWS Engineer — Interview Preparation
 
@@ -92,7 +91,7 @@ I would also place AWS WAF in front of the ALB.
                             v
                      RDS PostgreSQL
                     Private Subnets
-````
+```
 
 ### Security Group Flow
 
@@ -2446,8 +2445,3 @@ Answer:
 >
 > Defend your design in front of the interviewer.
 >
-
-```
-
-**Ab ye complete single block hai bhai.** Isko poora select karke GitHub ki `DAY-1-AWS-VPC-NETWORKING.md` file mein paste kar sakte ho.
-```
