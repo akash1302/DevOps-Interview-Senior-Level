@@ -5,9 +5,7 @@
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-In production, I set up a custom VPC spanning at least two Availability Zones for redundancy, and I split it into three subnet tiers. Public subnets hold the Application Load Balancer and the NAT Gateways. Private subnets hold the application servers, EC2 or EKS nodes, and they route any outbound traffic through the NAT Gateway instead of getting a public IP. Database subnets sit one layer deeper, hosting RDS with no route to the internet at all.
-
-So for a real deployment, that'd look like the ALB sitting in `10.0.1.0/24` and `10.0.2.0/24`, app servers in `10.0.10.0/24` and `10.0.20.0/24`, and a Multi-AZ RDS instance in `10.0.100.0/24` and `10.0.200.0/24`. The app servers can reach out to fetch API updates through the NAT Gateway, but nothing from the internet can ever reach them directly. On top of that, I restrict traffic with Security Groups at the instance level and NACLs at the subnet boundary, so even tier-to-tier communication is locked down to only what's actually needed.
+I always build the VPC across at least two Availability Zones, so one zone going down doesn't take the app with it. I split it into three layers — public subnets for the load balancer and NAT Gateway, private subnets for the app servers, and separate database subnets for RDS with no internet access at all. The app servers can go out to the internet through the NAT Gateway when they need to, but nothing from outside can ever reach them directly. I also lock things down with Security Groups on the instances and NACLs at the subnet level, so even traffic between layers is restricted to only what's needed.
 
 </details>
 
@@ -18,9 +16,7 @@ So for a real deployment, that'd look like the ALB sitting in `10.0.1.0/24` and 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-VPC Peering is great when you've only got a handful of VPCs — it's direct, there's no hourly gateway charge, and latency is low. The big catch is it doesn't support transitive routing, so if you've got N VPCs that all need to talk to each other, you end up needing a full mesh of N times N-minus-one over two peering connections, and that gets unmanageable fast.
-
-That's exactly the wall I hit once we scaled past a dozen VPCs across multiple accounts with an on-prem Direct Connect requirement. We moved to Transit Gateway, which acts as a central hub — every VPC just connects to the hub once, and routing is managed centrally instead of pair by pair. A real example: an enterprise with fifty AWS accounts, each with dev, QA, and prod VPCs, connects everything to a central Shared Services VPC and the on-prem data center through Transit Gateway, instead of standing up thousands of individual peering connections. We also use AWS Resource Access Manager to share that Transit Gateway across accounts cleanly.
+VPC Peering works fine for a small number of VPCs, it's simple and cheap. The big catch is it doesn't chain — if A is peered to B and B is peered to C, A still can't reach C. So once you're past a handful of VPCs, managing all those individual connections gets messy fast. That's why for anything bigger, like dozens of accounts each with their own VPCs, I use Transit Gateway instead. It works like a hub — every VPC connects to it once, and it handles the routing centrally, so you're not managing hundreds of point-to-point links by hand.
 
 </details>
 
@@ -31,9 +27,7 @@ That's exactly the wall I hit once we scaled past a dozen VPCs across multiple a
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Dynamic Scaling reacts to real-time CloudWatch metrics — say, scaling out once CPU crosses 80%. It works, but it's reactive, and launching and bootstrapping new instances takes time, so there's always a lag between the spike hitting and capacity actually catching up.
-
-For traffic that follows a predictable pattern, like a surge every morning at 8 AM, I pair that with Predictive Scaling, which uses machine learning on historical traffic data to pre-warm the Auto Scaling Group before the spike even hits. So on an e-commerce app, Predictive Scaling handles the expected 8 AM rush by scaling ahead of time, while Dynamic Scaling is still there to catch anything unexpected, like a flash sale nobody scheduled. Running both together gets you low latency during predictable peaks without over-provisioning and burning money the rest of the day.
+Dynamic Scaling reacts after the fact — it watches something like CPU usage and adds instances once a threshold is crossed. The problem is new instances take time to start up, so there's always a short lag. For traffic that follows a known pattern, like a daily rush every morning, I pair that with Predictive Scaling, which looks at past traffic and adds capacity ahead of time, before the spike even hits. So the predictable stuff gets handled in advance, and Dynamic Scaling is still there as a backup for anything unexpected, like a surprise sale.
 
 </details>
 
@@ -44,9 +38,7 @@ For traffic that follows a predictable pattern, like a surge every morning at 8 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I pick a placement group based on what the workload actually needs from the underlying hardware. If I've got a high-performance computing job or tightly-coupled nodes needing single-digit-millisecond latency between them, I use **Cluster** placement, which packs instances close together in one AZ for maximum throughput. If instead I've got something like a small set of critical control plane nodes that absolutely can't all fail together on the same rack, I use **Spread** placement, which puts each instance on distinct underlying hardware.
-
-For something like a distributed database — Cassandra, Kafka — I use **Partition** placement, which groups instances into logical partitions spread across separate racks, so a single rack failure only takes out one partition's worth of nodes, not the whole cluster. In practice, that might look like an HPC node cluster running in Cluster placement to hit 10Gbps-plus throughput between nodes, while a 3-node Kubernetes control plane runs in Spread placement so no two control plane nodes ever share the same physical host.
+I pick this based on what actually matters for the workload. If I need really low latency between instances, like for big data or high-performance jobs, I use **Cluster** placement, which packs instances close together on the same hardware. If I have a small set of critical nodes that must never fail together, like a control plane, I use **Spread** placement, which puts each one on separate physical hardware. For something like Kafka or Cassandra, where I want failures isolated across groups, I use **Partition** placement, which splits instances into separate racks by group.
 
 </details>
 
@@ -57,9 +49,7 @@ For something like a distributed database — Cassandra, Kafka — I use **Parti
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-By default, if a private instance needs to reach S3, that traffic goes out through the NAT Gateway, which means it's routed over the internet path and racks up NAT data processing charges. Instead, I attach an S3 Gateway Endpoint directly to the private subnet's route table, which keeps all that traffic entirely inside the AWS network — no NAT Gateway involved at all, no hourly or per-GB charge for it, and it's actually faster.
-
-We had a data pipeline reading and writing terabytes of logs to S3 daily from private EC2 instances, and just adding the Gateway Endpoint eliminated thousands of dollars a month in NAT data transfer fees. On top of the cost savings, I can attach an Endpoint Policy to lock down exactly which buckets that VPC is allowed to reach, which is a nice security tightening on top of the cost win. One thing worth knowing — this is different from an S3 Interface Endpoint using PrivateLink, which is a separate option with its own use case, but the Gateway Endpoint is what you want for standard private-subnet-to-S3 traffic.
+By default, private instances reach S3 through the NAT Gateway, and that costs money for every gigabyte that passes through it. Instead, I attach an S3 Gateway Endpoint straight to the private subnet's route table. That keeps all the S3 traffic inside AWS's own network, skips the NAT Gateway completely, and it's actually faster too. We did this on a pipeline moving terabytes of logs to S3 every day, and it saved real money on NAT charges. I also lock it down further with an endpoint policy, so that subnet can only reach specific buckets, not all of S3.
 
 </details>
 

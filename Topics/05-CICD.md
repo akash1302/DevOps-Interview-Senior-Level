@@ -5,9 +5,7 @@
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I break the Terraform pipeline into clearly separated stages instead of one big script. On every pull request, it runs `terraform fmt -check` and `terraform validate`, then a security scan with something like `checkov`, and finally generates a `terraform plan -out=tfplan`, saved as a pipeline artifact and posted directly as a PR comment for the team to actually review before anything touches real infrastructure.
-
-Once that's merged to `main`, the apply stage is gated behind manual approval — it doesn't run a fresh plan at that point, it applies the exact `tfplan` artifact that was already reviewed, which guarantees what got approved is exactly what executes, with nothing able to drift in between. In GitLab CI that's four distinct stages: `fmt-validate`, `security-scan`, `plan` triggered on PR, and `apply` set to `when: manual` and scoped to `main`. That separation is what actually prevents an accidental, unreviewed change from ever reaching production infrastructure.
+I split the pipeline into clear steps instead of one big script. On every pull request, it checks formatting, runs `terraform validate`, does a quick security scan, and then generates a `plan` that gets posted right on the PR so the team can actually review it before anything real happens. Once that's approved and merged to `main`, the apply step doesn't generate a fresh plan — it applies that exact same plan file that was already reviewed. That way, what got approved is exactly what runs, nothing can quietly change in between. Production apply is always behind a manual approval step too.
 
 </details>
 
@@ -18,9 +16,7 @@ Once that's merged to `main`, the apply stage is gated behind manual approval �
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I push for short-lived feature branches off `main`, merged back through Pull Requests, rather than long-lived release branches that just accumulate drift over time. Every PR triggers CI — tests, linters, security scans — and on top of the automated checks, it needs at least one real peer review before it can merge.
-
-Concretely, that means branch protection on `main` requiring a PR with at least one approval, dismissing stale approvals automatically if new commits land after the review, requiring the CI status checks to actually pass, and enforcing linear history so the log stays clean and bisectable. Once something's approved and merged, the CD pipeline picks it up automatically and pushes it toward staging and then production — there's no separate manual "release branch" step slowing things down. Code review itself is where I focus on the stuff automation can't catch — architecture decisions, security implications, whether the tests actually cover the real risk, not just style nits.
+I keep feature branches short-lived and merge them into `main` through pull requests, instead of long-lived release branches that just drift out of sync over time. Every PR has to pass automated checks — tests, linting, security scans — and also needs at least one real review from a teammate before it can merge. Once it's approved, the pipeline picks it up automatically and moves it toward staging and then production, no separate manual release step needed. In code review, I focus on the things automation can't catch, like whether the design actually makes sense, not just small style issues.
 
 </details>
 
@@ -31,9 +27,7 @@ Concretely, that means branch protection on `main` requiring a PR with at least 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-`git merge` creates a new commit that ties two branches together and keeps the true chronological history intact — it's always safe, because it never rewrites commits anyone else might already have. `git rebase` replays your commits on top of a new base, which gives you clean, linear history, but every replayed commit gets a brand new hash — that's a real history rewrite.
-
-In practice, I rebase my own feature branch locally to pull in the latest `main` before opening a PR — `git checkout feature/login`, `git fetch origin`, `git rebase origin/main`, resolve anything that conflicts, then push with `git push --force-with-lease` instead of a plain force, since that protects against overwriting a teammate's work I haven't seen yet. But I never rebase a branch that's already shared or public — that's the golden rule, because rewriting shared history breaks everyone else's local copy of it. Linear history really pays off when you're using `git bisect` to hunt down a regression — a clean, linear log makes that binary search actually trustworthy.
+`git merge` just adds a new commit and keeps the real history of both branches — always safe, since nothing gets rewritten. `git rebase` replays your commits on top of a new base, giving cleaner, straight-line history, but every commit gets a brand new ID in the process. I use rebase to update my own branch with the latest `main` before opening a PR, then push with `--force-with-lease`, which protects against overwriting someone else's work I haven't seen yet. The one hard rule — never rebase a branch that other people already pulled, since it breaks their local copy.
 
 </details>
 
@@ -44,9 +38,7 @@ In practice, I rebase my own feature branch locally to pull in the latest `main`
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-When Git can't automatically reconcile two branches — usually because the same lines got changed independently on both sides — it stops and marks the conflicted file with `<<<<<<<`, `=======`, and `>>>>>>>` markers. My job at that point is to open the file, actually understand both versions, decide which lines are correct, or blend them, and remove the markers entirely.
-
-Say a config file shows `server_port = 8080` on one side and `server_port = 9090` on the other — I'd manually pick the right value, clean out the markers, then run `git add server.conf` to mark it resolved, and finish with `git merge --continue` or `git rebase --continue` depending on which operation I was in the middle of. If things get messy enough that I want to bail entirely, `git merge --abort` cleanly puts the repo back to exactly where it was before the merge started, which is a good safety net to know about before diving into a gnarly multi-file conflict.
+When Git can't automatically combine two changes to the same lines, it stops and marks the file with conflict markers. My job is to open that file, look at both versions, decide what's actually correct, and remove the markers completely. Once it's fixed, I run `git add` on that file to mark it resolved, then continue the merge or rebase. If things get too messy, `git merge --abort` cleanly resets everything back to before the merge started, which is a good safety net before diving into a hard multi-file conflict.
 
 </details>
 
@@ -57,9 +49,7 @@ Say a config file shows `server_port = 8080` on one side and `server_port = 9090
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I use annotated tags following semantic versioning — something like `v2.1.0` — to mark an actual release point in history. An annotated tag, created with `git tag -a v2.1.0 -m "Release version 2.1.0 with payment gateway integration"`, carries real metadata: who tagged it, when, and why, which a lightweight tag doesn't give you.
-
-Pushing that tag is what kicks off the release pipeline — the CI config just watches for a pattern like `v*.*.*` on push, builds the artifacts, and tags the Docker image with the actual version number, `1.2.0`, never `latest`. That last part matters a lot — deploying `latest` to production means you can never be sure which code is actually running, and rollback becomes guesswork. With a real version tag on the image, I can trace a running container straight back to the exact Git commit it came from, and the GitHub Release entry attached to that tag gives the team a clear, permanent changelog for that version.
+I use annotated tags, like `v2.1.0`, to mark an actual release point. Pushing that tag is what kicks off the release pipeline — it builds the artifacts and tags the Docker image with that real version number, never `latest`. That last part matters a lot, since deploying `latest` means you can never be fully sure which code is actually running, and rolling back becomes guesswork. With a real version on the image, I can always trace exactly what's running in production straight back to the specific commit it came from.
 
 </details>
 

@@ -5,9 +5,7 @@
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Traffic flow in a VPC really comes down to what's sitting in each subnet's route table, not the subnet itself. When I create a VPC with a `/16` CIDR, like `10.0.0.0/16`, I carve it into smaller `/24` subnets spread across multiple AZs. What actually makes a subnet "public" or "private" is purely the route table attached to it — nothing else.
-
-A public subnet's route table has `0.0.0.0/0 -> igw-xxxx`, sending default traffic straight to an Internet Gateway. A private subnet's route table instead sends `0.0.0.0/0 -> nat-xxxx`, so outbound traffic goes through a NAT Gateway and nothing can initiate a connection inbound. Both route tables also carry a local route for the VPC's own CIDR, `10.0.0.0/16 -> local`, so traffic between subnets inside the VPC never has to leave through either gateway at all. It's worth knowing AWS always reserves a handful of IPs in every subnet CIDR for its own networking use, so your actual usable address count is a little less than the raw block size suggests.
+What actually decides if a subnet is public or private isn't the subnet itself, it's the route table attached to it. A public subnet's route table sends default traffic straight to an Internet Gateway. A private subnet's route table instead sends it to a NAT Gateway, so it can go out but nothing can come in directly. Every subnet also keeps a local route for talking to other subnets in the same VPC, so internal traffic never has to leave through either gateway at all.
 
 </details>
 
@@ -18,9 +16,7 @@ A public subnet's route table has `0.0.0.0/0 -> igw-xxxx`, sending default traff
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Security Groups are stateful firewalls attached at the instance or ENI level — if you allow inbound on port 443, the response traffic is automatically allowed back out, you don't have to configure that separately. NACLs sit at the subnet boundary instead, and they're stateless, which means you have to explicitly allow both the inbound request and the outbound ephemeral port range for the response, or connections will silently hang.
-
-The other big difference is that Security Groups only support allow rules, evaluated as a whole, while NACLs support explicit deny rules and are processed strictly in numbered order. That's exactly why I reach for a NACL when I need to hard-block a specific malicious IP across an entire subnet — say, adding attacker IP `192.0.2.45` as an explicit deny at rule number 100 — since a Security Group has no way to express a deny rule at all. For the normal web server case, though, a Security Group allowing inbound `443` from anywhere, with the stateful response handled automatically, is all that's needed.
+Security Groups sit on the instance itself and are stateful — if you allow traffic in, the response is automatically allowed back out, no extra work needed. NACLs sit at the subnet level and are stateless, meaning you have to allow both directions yourself, or things will just hang. The other big difference — Security Groups can only allow traffic, they can't block it. NACLs can do both, and they process rules in strict numbered order, which is why I use a NACL when I need to hard-block a specific bad IP across a whole subnet.
 
 </details>
 
@@ -31,9 +27,7 @@ The other big difference is that Security Groups only support allow rules, evalu
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-An Internet Gateway enables two-way traffic for public subnets — instances need a public IP to use it, and the IGW does a straightforward one-to-one NAT mapping so inbound connections can actually reach them. A NAT Gateway is a completely different direction — it's outbound-only, sitting in a public subnet with its own Elastic IP, letting private instances reach out to the internet without ever being reachable from it.
-
-So a public web server takes inbound connections on 443 straight through the IGW using its public IP. A private app server calling an external payment API instead goes out through the NAT Gateway, which translates its private IP, say `10.0.10.15`, to its own Elastic IP, relays the request, and routes the response back — but if someone outside tries to connect inbound to that same Elastic IP, it's dropped, because NAT Gateway never accepts unsolicited inbound traffic. One thing that trips people up — the NAT Gateway has to physically live in a *public* subnet with its own IGW route, even though the traffic it's serving is coming from private subnets.
+An Internet Gateway allows traffic both ways, for public subnets with a real public IP. A NAT Gateway is one-way only — it lets private instances reach out to the internet, but nothing from outside can ever start a connection back in through it. So a private app server can call an external API just fine through the NAT Gateway, but if someone tries to connect to it directly from outside, it just gets dropped. One thing worth knowing — the NAT Gateway itself always has to sit in a public subnet, even though it's serving private instances.
 
 </details>
 
@@ -44,9 +38,7 @@ So a public web server takes inbound connections on 443 straight through the IGW
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Site-to-Site VPN is an encrypted IPsec tunnel running over the regular public internet, connecting an on-prem router to a Virtual Private Gateway or Transit Gateway. It's fast to set up and cheap, but you're at the mercy of internet jitter and bandwidth limits, since it's still riding on the public internet underneath the encryption.
-
-Direct Connect is a completely different thing — it's a dedicated physical fiber link from the on-prem data center straight to an AWS Direct Connect location, bypassing the public internet entirely. That gets you consistent low latency, much higher bandwidth, anywhere from 1Gbps up to 100Gbps, and lower data egress costs on top of it. For a real hybrid setup, I'd run Direct Connect as the primary path for things like database replication or VM migration, and keep a Site-to-Site VPN running alongside it as an automated BGP failover — so if the physical fiber link ever goes down, traffic fails over to the VPN path instead of just dropping.
+Site-to-Site VPN is an encrypted connection that still runs over the regular public internet — quick to set up, cheap, but you're stuck with whatever performance the internet gives you that day. Direct Connect is a real physical cable straight from your building to AWS, so it skips the public internet completely and gives you steady, low latency and much higher bandwidth. For a real setup, I'd run Direct Connect as the main path and keep the VPN running alongside it as a backup, so if the physical line ever goes down, traffic just fails over automatically.
 
 </details>
 
