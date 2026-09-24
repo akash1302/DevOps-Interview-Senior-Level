@@ -60,7 +60,16 @@ I don't build for five nines of reliability on day one, that's expensive and mos
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I pick between two main approaches, depending on how risky the change is. For a normal update, I use a rolling deployment — new copies come up one at a time, and traffic only moves to them once they're actually healthy, so users never notice. For something riskier, like a big backend change, I use blue-green instead — the new version runs fully side by side with the old one, and I switch traffic over in one move, so if something's wrong, I can switch straight back in seconds. For anything touching money or core data, I'll also add a canary step first — send just 5% of traffic to the new version, watch the error rate for a while, and only then roll it out to everyone.
+For zero-downtime deployment, I make sure the new version is running before I send traffic to it.
+
+For example, if I have an application running on **ECS behind an ALB**, and I need to deploy version 2:
+
+* For a normal change, I use a **rolling deployment**. I start new containers with version 2, check their health, and then gradually remove the old version.
+* For a high-risk change, I use **blue-green deployment**. Version 1 and version 2 run separately. I test version 2 first, and once everything looks good, I switch the ALB traffic from version 1 to version 2.
+* If it's a very critical change, like a payment-related change, I can use **canary deployment**. I send a small amount of traffic, like 5%, to version 2 and monitor errors, latency, and logs. If everything is good, I gradually increase the traffic.
+
+The main idea is: **never send all users to the new version until I know it's healthy, and always keep a quick rollback option.**
+
 
 </details>
 
