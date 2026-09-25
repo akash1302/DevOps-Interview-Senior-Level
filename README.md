@@ -30,6 +30,7 @@ This README covers 14 core domains as one continuous reference (table of content
 | 09 | Monitoring & Logging | [`Topics/09-Monitoring-Logging.md`](./Topics/09-Monitoring-Logging.md) |
 | 10 | Production Troubleshooting | [`Topics/10-Production-Troubleshooting.md`](./Topics/10-Production-Troubleshooting.md) |
 | 11 | DevOps Architecture | [`Topics/11-DevOps-Architecture.md`](./Topics/11-DevOps-Architecture.md) |
+| 12 | Real-World Scenarios | [`Topics/12-Real-World-Scenarios.md`](./Topics/12-Real-World-Scenarios.md) |
 
 Each topic file uses plain-English, first-person candidate answers in `<details>` flashcards, same style as this README.
 
