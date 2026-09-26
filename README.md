@@ -31,6 +31,9 @@ This README covers 14 core domains as one continuous reference (table of content
 | 10 | Production Troubleshooting | [`Topics/10-Production-Troubleshooting.md`](./Topics/10-Production-Troubleshooting.md) |
 | 11 | DevOps Architecture | [`Topics/11-DevOps-Architecture.md`](./Topics/11-DevOps-Architecture.md) |
 | 12 | Real-World Scenarios | [`Topics/12-Real-World-Scenarios.md`](./Topics/12-Real-World-Scenarios.md) |
+| 13 | Git & GitHub/GitLab | [`Topics/13-Git-GitHub-GitLab.md`](./Topics/13-Git-GitHub-GitLab.md) |
+| 14 | Database & Caching | [`Topics/14-Database-Caching.md`](./Topics/14-Database-Caching.md) |
+| 15 | Cost Optimization / FinOps | [`Topics/15-Cost-Optimization-FinOps.md`](./Topics/15-Cost-Optimization-FinOps.md) |
 
 Each topic file uses plain-English, first-person candidate answers in `<details>` flashcards, same style as this README.
 
