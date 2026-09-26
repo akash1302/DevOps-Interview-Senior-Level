@@ -5,13 +5,23 @@
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-A rolling update uses two simple settings. One controls how many extra pods can be added while updating. The other controls how many old pods can go offline at once.
+I normally use a RollingUpdate strategy for application deployments. I control the rollout using maxSurge and maxUnavailable.
 
-When I push a new version, Kubernetes starts new pods, waits for each one to pass its health check, and only then shuts down an old one.
+For example, if I have 5 replicas, Kubernetes can start new pods while the old pods are still running. I usually keep maxUnavailable: 0 for applications where I don't want to lose capacity during deployment.
 
-**New pod starts → passes health check → gets added to traffic → one old pod shuts down → repeat until fully rolled out.**
+The new pod starts first, then Kubernetes checks its readiness probe. Once it becomes Ready and is added to the Service endpoints, Kubernetes starts terminating an old pod.
 
-If I set the offline number to zero, the app never loses capacity during the update. If something breaks halfway through, I can run one command to switch traffic straight back to the last working version.
+So the flow is:
+
+New pod → readiness check passes → receives traffic → old pod terminates → repeat.
+
+I also monitor the rollout using kubectl rollout status.
+
+If the new version has an issue, I can stop the rollout and rollback to the previous ReplicaSet using:
+
+kubectl rollout undo deployment/<deployment-name>
+
+Before calling it zero-downtime, I also make sure the application has enough replicas, proper readiness probes, and the application can handle multiple versions running at the same time.
 
 </details>
 
