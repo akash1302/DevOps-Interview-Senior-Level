@@ -9,7 +9,7 @@ What actually makes a subnet public or private is the route table attached to it
 
 A public subnet's route table sends internet traffic straight to an Internet Gateway. A private subnet's route table sends it to a NAT Gateway instead, so it can go out, but nothing can come in directly.
 
-Every subnet also has a local route, so traffic between subnets in the same VPC stays inside and never needs to go through either gateway.
+Every subnet also has a local route, so traffic between subnets in the same VPC stays inside and never needs either gateway.
 
 </details>
 
@@ -22,11 +22,7 @@ Every subnet also has a local route, so traffic between subnets in the same VPC 
 
 A Security Group sits on the server itself. If you allow traffic in, the reply is automatically allowed back out, no extra setup needed.
 
-A NACL sits at the subnet level, and it's stricter — you have to allow both directions yourself, or things just stop working.
-
-The other big difference is a Security Group can only allow traffic, it can't block it.
-
-A NACL can do both, and it checks rules in a strict order, which is why I use a NACL when I need to block one specific bad address across a whole subnet.
+A NACL sits at the subnet level and is stricter — you have to allow both directions yourself, or things just stop working. The other big difference is a Security Group can only allow traffic, it can't block it. A NACL can do both and checks rules in order, which is why I use a NACL when I need to block one specific bad address across a whole subnet.
 
 </details>
 
@@ -39,9 +35,7 @@ A NACL can do both, and it checks rules in a strict order, which is why I use a 
 
 An Internet Gateway allows traffic both ways, for public servers with a real public address.
 
-A NAT Gateway only goes one way — it lets private servers reach out to the internet, but nothing from outside can ever start a connection back in through it.
-
-So a private app server can call an outside service just fine through the NAT Gateway, but if someone tries to connect to that server directly, it gets blocked.
+A NAT Gateway only goes one way — it lets private servers reach out to the internet, but nothing from outside can ever start a connection back in through it. So a private app server can call an outside service fine through the NAT Gateway, but a direct connection attempt to it gets blocked.
 
 One thing to know — the NAT Gateway itself always has to sit in a public subnet, even though it's serving private servers.
 
@@ -54,11 +48,11 @@ One thing to know — the NAT Gateway itself always has to sit in a public subne
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-A Site-to-Site VPN is an encrypted connection that still travels over the regular internet. It's quick to set up and cheap, but performance depends on the internet that day.
+A Site-to-Site VPN is an encrypted connection that still travels over the regular internet — quick and cheap, but performance depends on the internet that day.
 
-Direct Connect is a real physical cable straight from your building to AWS. It skips the public internet completely, so you get steady, low delay and much higher speed.
+Direct Connect is a real physical link straight from your building to AWS, so it skips the public internet completely and gives steady, low delay and much higher speed.
 
-For a real setup, I'd use Direct Connect as the main path, and keep a VPN running as a backup, so if the physical line goes down, traffic switches over automatically.
+For a real setup, I'd use Direct Connect as the main path and keep a VPN as a backup, so traffic switches over automatically if the physical line ever goes down.
 
 </details>
 
@@ -69,15 +63,11 @@ For a real setup, I'd use Direct Connect as the main path, and keep a VPN runnin
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-First, the computer needs to turn that website name into a real address, so it asks a DNS server to look it up.
+First, the computer needs to turn that website name into a real address, so it asks a DNS server to look it up. Once it has the address, it opens a connection to the server, usually a secure one, which involves a quick back-and-forth to agree on encryption first.
 
-Once it has the address, it opens a connection to the server, usually over a secure connection, which involves a quick back-and-forth to agree on encryption before any real data moves.
+Then the browser sends the actual request, the server sends back the response, and the browser starts rendering it.
 
-Then the browser actually sends the request for the page, the server sends back the response, and the browser starts showing it.
-
-**DNS lookup finds the address → secure connection is set up → browser sends the request → server sends the response → page starts rendering.**
-
-If any one of these steps is slow, the whole page feels slow, so when I'm troubleshooting a "slow website," I check each of these steps separately instead of guessing which one is the problem.
+If any one of these steps is slow, the whole page feels slow, so when I'm troubleshooting a slow website, I check each step separately instead of guessing which one it is.
 
 </details>
 
@@ -88,11 +78,11 @@ If any one of these steps is slow, the whole page feels slow, so when I'm troubl
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-An Application Load Balancer works at the web traffic level — it can actually look at the request, like the URL path, and route different paths to different backend services. That makes it a great fit for normal web apps and APIs.
+An Application Load Balancer works at the web traffic level — it can look at the actual request, like the URL path, and route different paths to different backend services. That's a good fit for normal web apps and APIs.
 
-A Network Load Balancer works at a lower level — it just forwards raw connections, without looking inside them, which makes it extremely fast and able to handle a huge number of connections.
+A Network Load Balancer works at a lower level — it just forwards raw connections without looking inside them, which makes it extremely fast and able to handle a huge number of connections.
 
-I'd use a Network Load Balancer for something like a database proxy or a service needing a fixed IP address, and an Application Load Balancer for basically every normal web application.
+I'd use a Network Load Balancer for something like a database proxy or a service that needs a fixed IP, and an Application Load Balancer for basically every normal web app.
 
 </details>
 
@@ -103,13 +93,11 @@ I'd use a Network Load Balancer for something like a database proxy or a service
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I test the connection itself first, separately from the app.
+I test the raw connection itself first, separately from the app. If I can open a basic connection to the right port, the network path is fine, and the problem is actually inside the app — maybe it's not listening correctly, or it's rejecting the request for its own reasons.
 
-If I can open a basic connection to the right port on the other server, then the network path is fine, and the problem is actually inside the application — maybe it's not listening correctly, or it's rejecting the request for its own reasons.
+If I can't even open a basic connection, it's a real network issue, and I check firewall rules on both ends first, then the routing in between.
 
-If I can't even open a basic connection, then it really is a network issue, and I check the usual suspects in order — firewall rules on both ends, then the routing in between.
-
-**Try a raw connection to the port → connection works, app problem, check app logs. Connection fails, network problem, check firewalls then routing.**
+Testing the raw connection first, before blaming either side, saves a lot of time chasing the wrong thing.
 
 </details>
 
@@ -120,15 +108,11 @@ If I can't even open a basic connection, then it really is a network issue, and 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-In AWS, this almost always comes down to one of four things — Security Groups, NACLs, route tables, or the app itself — so I check them in that order, starting with the most common culprit.
+In AWS, this almost always comes down to Security Groups, NACLs, route tables, or the app itself, so I check them in that order, starting with the most common culprit.
 
-First, Service B's Security Group needs an inbound rule that actually allows traffic from Service A's Security Group on the right port. I always reference the other security group directly in the rule, not a raw IP range, since IPs change but the group reference doesn't.
+First, Service B's Security Group needs an inbound rule allowing traffic from Service A's Security Group on the right port — I always reference the security group directly, not an IP range, since IPs change but that reference doesn't. Then I check Service A's outbound rule, since people often only check inbound.
 
-Then I check Service A's outbound rule, to make sure it's actually allowed to send traffic to that port in the first place. If both of those look fine, I check the NACLs on both subnets, since those need to allow the return traffic on the high port range too.
-
-**Check Service B's inbound rule → check Service A's outbound rule → check NACLs on both subnets → still stuck, run VPC Reachability Analyzer for the exact blocking rule.**
-
-If I've checked all of that and I'm still stuck, I'll use the VPC Reachability Analyzer — you give it the source and destination, and it walks the actual path and tells you exactly which rule is blocking it.
+If both look fine, I check the NACLs on both subnets next. And if I'm still stuck after all that, I'll use the VPC Reachability Analyzer — you give it the source and destination, and it walks the actual path and tells you exactly which rule is blocking it.
 
 </details>
 

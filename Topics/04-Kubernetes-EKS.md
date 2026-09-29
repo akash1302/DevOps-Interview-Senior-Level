@@ -5,23 +5,11 @@
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I normally use a RollingUpdate strategy for application deployments. I control the rollout using maxSurge and maxUnavailable.
+I normally use a RollingUpdate strategy, controlled with `maxSurge` and `maxUnavailable`. For example, with 5 replicas, Kubernetes can start new pods while the old ones are still running. I usually keep `maxUnavailable: 0` when I don't want to lose any capacity during a deploy.
 
-For example, if I have 5 replicas, Kubernetes can start new pods while the old pods are still running. I usually keep maxUnavailable: 0 for applications where I don't want to lose capacity during deployment.
+The new pod starts, Kubernetes checks its readiness probe, and only once it's actually ready does an old pod get terminated. I watch the rollout with `kubectl rollout status`, and if something's wrong, `kubectl rollout undo deployment/<name>` rolls straight back to the previous version.
 
-The new pod starts first, then Kubernetes checks its readiness probe. Once it becomes Ready and is added to the Service endpoints, Kubernetes starts terminating an old pod.
-
-So the flow is:
-
-New pod → readiness check passes → receives traffic → old pod terminates → repeat.
-
-I also monitor the rollout using kubectl rollout status.
-
-If the new version has an issue, I can stop the rollout and rollback to the previous ReplicaSet using:
-
-kubectl rollout undo deployment/<deployment-name>
-
-Before calling it zero-downtime, I also make sure the application has enough replicas, proper readiness probes, and the application can handle multiple versions running at the same time.
+Before I'd call anything zero-downtime, I make sure there are enough replicas, the readiness probes are meaningful, and the app can genuinely handle two versions running side by side for a moment.
 
 </details>
 
@@ -32,13 +20,11 @@ Before calling it zero-downtime, I also make sure the application has enough rep
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-A PDB protects against planned actions, like taking a server down for an upgrade. It does not protect against a random crash.
+A PDB protects against planned actions, like taking a node down for maintenance. It doesn't protect against a random crash.
 
-Without a PDB, taking a server down could accidentally kill every copy of an app at once, if they're all sitting on that server.
+Without one, draining a node could accidentally kill every copy of an app at once if they're all sitting there. What I normally do is set a rule like "at least 2 copies must stay running," and Kubernetes blocks the drain until enough healthy copies exist elsewhere.
 
-I set a rule like "at least 2 copies must stay running." Kubernetes will then block the server from being taken down until enough healthy copies exist somewhere else.
-
-One thing to watch for — if an app only has one copy, this rule can block the update forever, since there's no backup copy to rely on.
+One thing to watch for — if an app only has one replica, this rule can block a drain forever, since there's no backup copy to fall back on.
 
 </details>
 
@@ -49,13 +35,11 @@ One thing to watch for — if an app only has one copy, this rule can block the 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-A Deployment is for apps where any copy can replace any other copy, no problem. That's fine for something stateless, like a web server with no memory of past requests.
+A Deployment works fine when any pod can replace any other pod, like a stateless web server.
 
-For something like a database, I use a StatefulSet instead, because it needs its own identity and its own storage.
+For something like a database, I use a StatefulSet instead, because it needs a stable identity and its own storage. Each pod gets a fixed name and its own dedicated storage that follows it around, even if it gets rescheduled to a different node.
 
-Each copy gets a fixed name and its own dedicated storage that follows it around, even if it moves to a different server.
-
-Also — deleting a StatefulSet does not delete its storage. That storage stays behind on purpose, so data isn't lost by accident.
+Also worth knowing — deleting a StatefulSet doesn't delete its storage. That's on purpose, so data doesn't disappear by accident.
 
 </details>
 
@@ -66,13 +50,9 @@ Also — deleting a StatefulSet does not delete its storage. That storage stays 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I give each team its own namespace, like a separate folder.
+I give each team its own namespace. Then I set a resource quota on it — how much CPU and memory it's allowed to use in total — so one team can't eat up resources meant for another.
 
-Then I set a limit on that namespace — how much CPU and memory it's allowed to use in total. This stops one team from using up resources that other teams need.
-
-I also set default limits for any app that doesn't set its own.
-
-For access control, I give each team permission only inside their own namespace, never across the whole cluster. That way, one team genuinely can't see or touch another team's stuff.
+I also set default limits for anything that doesn't specify its own. For access, I give each team permission only inside their own namespace, never across the whole cluster, so one team genuinely can't see or touch another team's workloads.
 
 </details>
 
@@ -83,13 +63,11 @@ For access control, I give each team permission only inside their own namespace,
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-A CRD lets you add a brand new type of object to Kubernetes, one that isn't built in. On its own, that's just a definition, it doesn't do anything by itself.
+A CRD lets you register a brand new type of object with Kubernetes. On its own, that's just a definition — it doesn't do anything.
 
-A Custom Controller is what actually makes it work — it watches for those objects and takes action to keep things matching what's expected.
+A Custom Controller is what actually makes it useful — it watches for those objects and takes real action to keep the cluster matching what's expected.
 
-**New CRD object gets created → Custom Controller notices it → controller takes real action → cluster state matches what was expected.**
-
-The Sidecar pattern is different. It's a second, helper container that runs next to your app, inside the same pod. Istio uses this to automatically add a network helper to every app, without changing the app's own code at all.
+The Sidecar pattern is different — it's a helper container running next to your app, inside the same pod. Istio uses this to add a network proxy to every app automatically, without touching the app's own code.
 
 </details>
 
@@ -100,13 +78,11 @@ The Sidecar pattern is different. It's a second, helper container that runs next
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-A Readiness Probe tells Kubernetes whether a pod is ready to actually receive traffic right now.
+A Readiness Probe tells Kubernetes whether a pod is ready to receive traffic right now. If it fails, the pod is just pulled out of rotation, but left running, since it might recover.
 
-If it fails, the pod is just pulled out of the traffic list, but Kubernetes leaves it running, since it might recover on its own.
+A Liveness Probe is different — if it fails, Kubernetes assumes the app is stuck for good and restarts the container.
 
-A Liveness Probe is different — if it fails, Kubernetes assumes the app is stuck for good, and it kills and restarts the container.
-
-The mistake I see a lot is using the same check for both. If a slow but recovering app fails a Liveness Probe, Kubernetes keeps restarting it over and over, which just makes a slow problem into a much bigger outage.
+The mistake I see is using the same check for both. If a slow but recovering app fails the liveness check, Kubernetes keeps restarting it over and over, turning a slow problem into a much bigger outage.
 
 </details>
 
@@ -117,11 +93,9 @@ The mistake I see a lot is using the same check for both. If a slow but recoveri
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-The Horizontal Pod Autoscaler watches a metric, usually CPU usage, and adds or removes pod copies to keep that metric near a target you set.
+The HPA watches a metric, usually CPU, and adds or removes pods to keep it near a target. It only works correctly if every pod already has CPU and memory requests set — without that, it has nothing real to measure against.
 
-But it only works if every pod already has a CPU or memory request set in its config. Without that, the autoscaler has nothing real to measure against, and it just won't work properly.
-
-I also always set a minimum and a maximum number of copies, so it can't scale down to zero by accident during a quiet period, and it can't scale up forever if something goes wrong.
+I also always set a minimum and maximum replica count, so it can't scale down to zero during a quiet period, and can't scale up forever if something's actually wrong with the app.
 
 </details>
 
@@ -132,15 +106,11 @@ I also always set a minimum and a maximum number of copies, so it can't scale do
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I never upgrade production first. I always test the new version on a non-production cluster running the same apps, and check what's changed or removed in that version.
+I never upgrade production first. I test the new version on a non-production cluster running the same apps, and check what's changed or removed in that version.
 
-For the real upgrade, I do the control plane first, since it can run a slightly newer version than the worker nodes for a short time.
+For the real upgrade, I do the control plane first, since it can run slightly ahead of the worker nodes for a short time. Then I upgrade worker nodes in small batches, moving pods off each one before touching it, instead of doing it all at once.
 
-Then I upgrade the worker nodes in small groups, moving pods off each one safely before touching it, instead of upgrading everything at once.
-
-**Test new version in non-prod → upgrade control plane → upgrade worker nodes in small batches → move pods off each node first → verify → move to the next batch.**
-
-If something breaks partway through, only part of the cluster is affected, not all of it at once.
+That way, if something breaks partway through, only part of the cluster is affected, not everything.
 
 </details>
 
@@ -151,17 +121,11 @@ If something breaks partway through, only part of the cluster is affected, not a
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I wouldn't try to move this in one shot. Containerizing and moving to Kubernetes at the same time as dealing with the stateful parts is exactly how these migrations blow their timeline and end up with a broken rollback plan.
+I wouldn't try to move this in one big step. First, I containerize the app as it is today, no architecture changes yet, and I run that container outside Kubernetes first to confirm it behaves the same way.
 
-First step is just containerizing the app as-is, no architecture changes yet — a **Dockerfile** that replicates its current runtime environment, and I run that container in the existing on-prem or EC2 setup first, to confirm it behaves identically to the non-containerized version before Kubernetes even enters the picture.
+For the stateful parts, like a database or local files, I move those out to managed services first — the database to RDS, files to S3 or EFS depending on the access pattern. That makes the actual EKS deployment stateless, which is a much simpler and safer thing to run.
 
-For the stateful components — usually a database or a local file store the app was writing to directly — I don't try to run those inside EKS as StatefulSets unless there's a real reason to. I'd move the database to **RDS/Aurora** and point the containerized app at it instead, and for file storage, either **S3** if the access pattern allows it, or an **EFS**-backed PersistentVolume if the app genuinely needs a shared POSIX filesystem. Pulling state out of the app onto managed services first makes the actual EKS deployment stateless, which is a much simpler and safer thing to run.
-
-Once the app is containerized and its state is externalized, I deploy it to EKS behind a **Deployment** with proper readiness probes, and I run it side-by-side with the legacy system for a while, routing a small percentage of traffic over first rather than a hard cutover.
-
-**Simple flow:** Containerize app as-is → validate outside Kubernetes → externalize state to RDS/S3/EFS → deploy stateless container to EKS → shift traffic gradually → decommission legacy.
-
-**Key point:** I separate "containerize" from "make stateless" from "move to Kubernetes" — three distinct steps, not one big migration, so each one can be validated and rolled back independently.
+Once it's containerized and stateless, I deploy it to EKS and run it side-by-side with the legacy system for a while, shifting a small percentage of traffic over first, rather than a hard cutover.
 
 </details>
 
@@ -172,15 +136,11 @@ Once the app is containerized and its state is externalized, I deploy it to EKS 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I keep environments on fully separate clusters, not namespaces on one shared cluster — for production specifically, I don't want a dev team's mistake, like a runaway resource request or a bad CRD, to have any physical path to affecting production at all.
+I keep environments on fully separate clusters, not namespaces on one shared cluster, so a mistake in dev has no physical path to affecting production.
 
-For managing the actual cluster infrastructure consistently across all three, I provision them with **Terraform**, using the same module with environment-specific variables — node group sizes, instance types, and add-on versions differ, but the underlying structure is identical, so I'm not maintaining three different hand-written cluster configs that slowly drift apart.
+For the infrastructure itself, I provision all three with the same Terraform module, just different variables, so I'm not maintaining three hand-written configs that slowly drift apart.
 
-For what's actually deployed inside each cluster, I use a **GitOps** approach with **ArgoCD** — each cluster points at a different branch or directory in the same Git repo, so promoting a change from dev to staging to production is a Git operation, a PR merging one environment's manifests forward, not someone running `kubectl apply` by hand against three different clusters and hoping they typed the right context.
-
-Access is scoped per cluster through IAM — engineers get broad access to dev, more restricted access to staging, and production access is limited to a small group plus the CI/CD pipeline's own role, enforced via **EKS access entries** or `aws-auth`, not shared kubeconfig files passed around.
-
-**Key point:** Same Terraform module for consistent infrastructure, GitOps for consistent and auditable deployments, and IAM-based access that gets tighter the closer you get to production.
+For what gets deployed inside each cluster, I use a GitOps approach — each cluster tracks a different branch or folder in the same repo, so promoting a change is a Git operation, not someone running `kubectl apply` by hand against the wrong context. Access also gets tighter the closer you get to production — broad access for dev, restricted for staging, and only a small group plus the pipeline itself for production.
 
 </details>
 
@@ -191,17 +151,11 @@ Access is scoped per cluster through IAM — engineers get broad access to dev, 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I don't start reading application code — I check the platform layer first, since that's faster to rule in or out and often is the actual cause.
+I check the platform layer first before assuming it's an app bug, since that's usually faster to rule out.
 
-First, `kubectl get pods` to see if pods are actually healthy, or cycling through restarts. If pods look fine, I check `kubectl get endpoints` for the Service, to confirm it's actually got healthy pods behind it — an empty or partial endpoint list means some requests are being routed to nothing.
+First `kubectl get pods` to see if they're healthy or restarting. Then `kubectl get endpoints` for the Service, to confirm it actually has healthy pods behind it. I also check `kubectl top pods` against the configured limits — I've had "random" failures turn out to be CPU throttling, where the app was technically up but too slow to respond in time.
 
-Then I check resource pressure — `kubectl top pods` against the configured requests/limits. I've had "random" failed requests turn out to be CPU throttling under load, where the app was technically running but too slow to respond within the client's timeout, which shows up as failures on the client side with nothing obviously wrong on the pod side.
-
-If pods and resources both look fine, I check the **ALB/Ingress** layer next — target group health in the AWS console, and whether the failures are actually 5xx from the app or something like 503s from the load balancer having no healthy targets during a rollout.
-
-**Simple flow:** Check pod health → check Service endpoints have healthy targets → check CPU/memory against limits → check ALB/Ingress target health → check app logs for the specific failing requests → correlate failure timestamps against any recent deploy.
-
-**Key point:** I rule out platform-level causes — pod health, resource limits, load balancer routing — before assuming it's an application bug, since in my experience it's the platform layer more often than not.
+If pods and resources look fine, I check the load balancer's target health next, since a rollout can briefly leave it with no healthy targets.
 
 </details>
 
@@ -212,15 +166,11 @@ If pods and resources both look fine, I check the **ALB/Ingress** layer next —
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I wouldn't route this over the public internet or through a NAT Gateway — that adds latency and cost for something that should stay entirely inside AWS's network.
+I wouldn't route this over the public internet or through a NAT Gateway — that adds cost and latency for something that should stay inside AWS's own network.
 
-**VPC Peering** between the EKS cluster's VPC and the RDS VPC is the straightforward option if it's just these two VPCs involved — it's a direct, private connection with no additional hop, and once the peering connection and route tables are set up, traffic between the pods and RDS stays on AWS's internal network the whole way.
+For just two VPCs, VPC Peering is the simple option — a direct, private connection. If there are more VPCs involved, or it's likely to grow, I'd use a Transit Gateway instead, since Peering gets hard to manage past a handful of connections.
 
-If there are more than a couple of VPCs involved, or this is likely to grow — more clusters, more shared services — I'd use a **Transit Gateway** instead, since Peering doesn't scale cleanly past a handful of VPCs and Transit Gateway gives a proper hub instead of a growing mesh of point-to-point connections.
-
-Either way, the security groups matter as much as the network path — the RDS security group needs an inbound rule allowing traffic from the EKS node/pod security group on the database port, referencing the security group directly rather than a CIDR range, since node IPs can change as the cluster scales.
-
-**Key point:** Peering or Transit Gateway for the private network path — VPC Peering for a simple two-VPC case, Transit Gateway once it's more than that — plus security group rules that reference the actual security group, not an IP range that'll drift.
+Either way, the security groups matter just as much — the RDS security group needs to allow traffic from the EKS node security group specifically, not just an IP range, since node IPs change as the cluster scales.
 
 </details>
 
@@ -231,17 +181,11 @@ Either way, the security groups matter as much as the network path — the RDS s
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-For scaling the number of pod copies, that's the **Horizontal Pod Autoscaler**, watching CPU and memory against a target I set — but it only works correctly if every pod already has `resources.requests` set in its spec, since the HPA calculates its percentage against the request value, not against the node's total capacity.
+That's the Horizontal Pod Autoscaler, scaling pod count based on CPU or memory against a target I set. It only works properly if every pod already has resource requests set, since the HPA calculates its percentage against that.
 
-I always set explicit `minReplicas` and `maxReplicas` too, so it can't scale down to zero during a quiet period and can't scale up without bound if something's actually wrong, like a bug causing runaway CPU usage — without a max, the HPA would just keep adding pods trying to bring CPU back to target, potentially exhausting the cluster's node capacity in the process.
+I always set a minimum and maximum replica count too, so it doesn't scale to zero in a quiet period or scale up without limit if something's genuinely wrong.
 
-For metrics beyond basic CPU/memory — like scaling based on queue depth or request rate — I'd use the **Kubernetes Metrics Server** for the basics, or **KEDA** if I need to scale off something like an SQS queue length, which the standard HPA can't do on its own.
-
-On top of pod-level scaling, I also need the actual node capacity to grow to fit those new pods — that's **Cluster Autoscaler** or **Karpenter** watching for pods stuck in `Pending` because there's no room, and provisioning new nodes to fit them.
-
-**Simple flow:** Set resource requests on every pod → HPA scales pod count based on CPU/memory against those requests → Karpenter/Cluster Autoscaler adds nodes when pods can't be scheduled → min/max bounds on both layers.
-
-**Key point:** HPA scales pods, Karpenter/Cluster Autoscaler scales nodes — you need both working together, not just one, or pods end up stuck `Pending` with nowhere to actually run.
+Scaling pods alone isn't enough though — I also need the node capacity to grow to fit them, which is what Cluster Autoscaler or Karpenter handles, adding nodes when pods are stuck waiting for room to run.
 
 </details>
 
@@ -252,15 +196,11 @@ On top of pod-level scaling, I also need the actual node capacity to grow to fit
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-The core settings are `maxSurge` and `maxUnavailable` on the Deployment's `RollingUpdate` strategy. I set `maxUnavailable: 0`, so Kubernetes never takes an old pod down until a new one is confirmed healthy — capacity never actually drops below 100% during the rollout, only surges above it temporarily.
+The main settings are `maxSurge` and `maxUnavailable`. I set `maxUnavailable: 0`, so Kubernetes never takes an old pod down until a new one is confirmed healthy.
 
-That alone isn't enough without a real readiness probe — one that actually checks the app can serve traffic, not just that the process started, since Kubernetes only adds a pod to the Service's endpoints once its readiness probe passes. A shallow probe defeats the whole point of `maxUnavailable: 0`, since it'll mark a pod ready before it's actually able to handle requests.
+That only works well if the readiness probe is actually meaningful — checking that the app can really serve traffic, not just that the process started. A shallow probe defeats the whole point, since it'll mark a pod ready before it can actually handle requests.
 
-I also set `terminationGracePeriodSeconds` with real headroom, and add a short `preStop` hook if the app needs time to finish in-flight requests before shutting down — otherwise a pod can get killed while the load balancer hasn't finished deregistering it yet, which shows up as brief errors during every deploy even with the rollout strategy configured correctly.
-
-**Simple flow:** maxUnavailable: 0, maxSurge set for capacity headroom → new pod starts → real readiness probe passes → added to Service → old pod gets a preStop grace period before shutdown → repeat per pod.
-
-**Key point:** The rollout strategy settings only work as well as the readiness probe backing them — I check the probe is meaningful before trusting `maxUnavailable: 0` to actually deliver zero downtime.
+I also give the pod a short grace period before shutdown, so it doesn't get killed while the load balancer is still sending it traffic during the switch.
 
 </details>
 
@@ -271,15 +211,11 @@ I also set `terminationGracePeriodSeconds` with real headroom, and add a short `
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-This depends on whether I mean access to the Kubernetes API server itself, or access to an application running inside the cluster — they're two different controls.
+This depends on whether I mean the Kubernetes API server itself, or an application running inside the cluster — those are two different settings.
 
-For the API server, EKS lets you configure the **cluster endpoint access** — I'd set it to private, or if public access is still needed for some tooling, restrict the public endpoint's allowed CIDR blocks to the specific IP ranges that should be able to reach it, like the office VPN's egress IP or a bastion host, rather than leaving it open to `0.0.0.0/0`, which is the default and something I always check and tighten on a new cluster.
+For the API server, EKS lets you restrict the allowed IP ranges on the cluster endpoint, or set it to private entirely, rather than leaving it open to everyone, which is worth checking on any new cluster.
 
-For an application exposed through an Ingress or a Service of type LoadBalancer, that's controlled at the **ALB/NLB security group** level, or through an annotation on the Ingress that restricts the load balancer's allowed source CIDR, rather than trying to do IP filtering inside the app itself.
-
-If the requirement is more nuanced than a static IP range — like needing to combine IP restriction with authentication — I'd look at putting something like **AWS WAF** in front of the ALB, which lets me combine IP allow-listing with rate limiting and other rules in one place, rather than stacking multiple separate mechanisms.
-
-**Key point:** API server access is an EKS cluster-level setting; application access is a load balancer/security group setting — restricting the wrong one leaves the other side still wide open.
+For an application exposed through a load balancer, that's controlled at the load balancer's own security group, not inside the app. If I need something more than a static IP list, like combining it with rate limiting, I'd put a web application firewall in front of it instead.
 
 </details>
 
@@ -290,15 +226,11 @@ If the requirement is more nuanced than a static IP range — like needing to co
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Native AWS cost tools stop at the EC2/EKS cluster level — they don't know how to split cost by Kubernetes namespace on their own, since from AWS's perspective it's all just compute on shared nodes. So I bring in something purpose-built for this, like **Kubecost** or **AWS's own Split Cost Allocation Data** feature for EKS, which specifically breaks down cluster spend by namespace, label, or team.
+Regular AWS cost tools stop at the EC2 or cluster level — they don't know how to split cost by namespace on their own. So I'd bring in a tool built for this, like Kubecost, which breaks down spend by namespace, label, or team.
 
-The accuracy of that breakdown depends entirely on every workload having proper `resources.requests` set, since cost gets allocated proportionally based on requested (or actual) resource usage per namespace — a namespace with no requests set throws off the whole allocation, so I enforce that through admission policy, not just convention.
+That breakdown is only as accurate as the resource requests every workload sets, so I make sure every pod actually sets CPU and memory requests, and every namespace has consistent labels for team and environment.
 
-I also make sure every namespace carries a consistent labeling scheme — team, environment, cost-center — so the breakdown can actually be grouped meaningfully, not just shown as a flat list of thirty namespace names nobody outside the platform team recognizes.
-
-Once that's flowing, I get it into the same weekly report I'd already be sending for regular AWS cost allocation, broken down by namespace/team alongside the rest of the account's spend, rather than as a separate tool only the platform team ever opens.
-
-**Key point:** Namespace-level cost visibility needs a purpose-built tool like Kubecost, and it's only as accurate as the resource requests and labels every workload is actually setting.
+Once that's working, I get it into the same regular cost report the rest of the account already gets, instead of it being a separate tool only the platform team looks at.
 
 </details>
 
@@ -309,17 +241,11 @@ Once that's flowing, I get it into the same weekly report I'd already be sending
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-`CrashLoopBackOff` just means the pod keeps failing and Kubernetes keeps retrying with a longer backoff each time — it's the kubelet's retry wrapper, not the actual error, so I don't stop there.
+`CrashLoopBackOff` just means the pod keeps failing and Kubernetes keeps retrying with a longer wait each time. It doesn't tell you why on its own.
 
-`kubectl describe pod` first, for the exit code, the reason, and recent events. Exit code `137` means it was `SIGKILL`ed, almost always an OOM kill — I'd check that against `kubectl top pod` history or the metrics stack, comparing real usage to the configured `limits.memory`. Exit code `1` or another app-specific code usually means the application itself failed on startup, which points me at the app, not the platform.
+First `kubectl describe pod` for the exit code and recent events. Exit code 137 almost always means it ran out of memory, so I'd check real usage against the configured limit. Any other exit code usually points to the app itself, so I check `kubectl logs --previous`, since the current instance already restarted with a clean slate.
 
-Then `kubectl logs <pod> --previous`, since the current container instance already restarted with a clean slate — the previous instance's logs are what actually show why it died, and people often check `logs` without `--previous` and just see an empty or freshly-started log with nothing useful in it.
-
-If the logs are genuinely empty or unhelpful, I'll temporarily override the container's command to something like `sleep 3600` in a throwaway copy of the manifest, exec into it while it's held open, and check environment variables, config, and connectivity by hand — this is my last resort, not the first thing I reach for.
-
-**Simple flow:** describe pod for exit code/events → 137 means OOM, check real memory usage vs limit → other exit code, check `logs --previous` for the app's actual error → still unclear, override command to keep it alive and exec in to debug interactively.
-
-**Key point:** The exit code from `describe pod` tells me which direction to actually investigate — I don't guess between "it's a memory problem" and "it's an app bug," the exit code answers that directly.
+If the logs still don't explain it, I'll temporarily change the startup command to just keep the container alive, so I can get inside and check things by hand.
 
 </details>
 
@@ -330,15 +256,11 @@ If the logs are genuinely empty or unhelpful, I'll temporarily override the cont
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-CPU throttling specifically means a pod is hitting its configured `limits.cpu` and the kernel's CFS scheduler is holding it back — and the tricky part is this can happen even when `kubectl top` shows average CPU usage well under the limit, since the scheduler enforces the limit over very short windows, like every 100 milliseconds, not over a full minute.
+CPU throttling means a pod is hitting its CPU limit, and the tricky part is this can happen even when average usage looks fine on a dashboard, since the limit gets enforced over very short windows, not over a full minute.
 
-I check `container_cpu_cfs_throttled_periods_total` against `container_cpu_cfs_periods_total` in Prometheus if it's set up, since that's the metric that actually shows per-period throttling — `top`-style averages hide this completely, so a workload can look fine on a dashboard while genuinely getting throttled in short bursts that hurt latency.
+If Prometheus is set up, I check the throttled-periods metric specifically, since that's what actually shows this — average CPU hides it completely.
 
-The fix is either raising `limits.cpu` with real headroom above observed burst usage rather than average usage, or for genuinely latency-sensitive workloads, removing the CPU limit entirely and relying on `requests.cpu` for scheduling, accepting the noisy-neighbor trade-off, or pairing it with the static CPU manager policy for guaranteed, pinned cores on the node.
-
-I also check if this is actually a capacity problem in disguise — if every pod on a node is set to burst simultaneously, like at the top of every minute for a scheduled batch job, the node itself doesn't have enough real CPU to give everyone their burst at once, no matter how the limits are configured, and that needs either spreading the workloads out or adding more node capacity.
-
-**Key point:** Average CPU from `kubectl top` hides real throttling — the CFS throttled-periods metric is what actually shows it, and the fix is sizing limits against burst usage, not average usage.
+The fix is usually raising the CPU limit with real headroom above burst usage, not average usage, or for something genuinely latency-sensitive, removing the limit and relying on the request value for scheduling instead.
 
 </details>
 

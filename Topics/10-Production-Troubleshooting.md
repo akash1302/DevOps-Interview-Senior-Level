@@ -5,15 +5,11 @@
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I check the host machine first, then the container. This way I don't waste time on the wrong problem.
+I check the host machine first, then the container, so I don't waste time on the wrong problem. If the host itself can't reach the internet, that's the real issue, and it has nothing to do with Docker yet.
 
-If the host itself can't reach the internet, that's the real issue, and it has nothing to do with Docker yet.
+If the host is fine, I go inside the container and test the same thing — a plain IP address first, then a real website name, since those fail for different reasons. If IP works but the name doesn't, it's DNS. If even the IP fails, I check the host's network settings next.
 
-If the host is fine, I go inside the container and test the same thing — a plain IP address first, then a real website name, since those can fail for different reasons.
-
-**Ping the host → fine, go inside the container → ping an IP → works, try a domain name → fails on domain only, it's DNS → fails on IP too, check host network settings.**
-
-One real case I've seen — a firewall reset wiped out Docker's own network rules, and restarting Docker rebuilt them and fixed it.
+For example, I had a case once where a firewall reset wiped out Docker's own network rules, and restarting Docker rebuilt them and fixed it.
 
 </details>
 
@@ -24,13 +20,11 @@ One real case I've seen — a firewall reset wiped out Docker's own network rule
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-First, I check the logs from the last time it crashed, since the app has already restarted with a clean slate.
+First I check the logs from the last crash, since the app has already restarted with a clean slate. Then I check the exit code, because that tells me what actually happened.
 
-Then I check the exit code, because that tells me what actually happened.
+A code of 137 almost always means it ran out of memory, so the fix is raising the memory limit. A code of 1 usually means the app hit an error on its own, like a missing setting — that's a code problem, not an infrastructure one.
 
-A code of `137` almost always means it ran out of memory — the fix is raising the memory limit. A code of `1` usually means the app hit an error on its own, like a missing setting.
-
-If the logs don't explain anything, I'll change the startup command for a moment, just to keep it running, so I can get inside and check things by hand.
+If the logs don't explain anything, I'll change the startup command for a moment just to keep it running, so I can get inside and check things by hand.
 
 </details>
 
@@ -41,11 +35,9 @@ If the logs don't explain anything, I'll change the startup command for a moment
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-If the state file gets deleted, and we have versioning turned on for that storage bucket, recovery is quick.
+If the state file gets deleted and versioning is turned on for that storage bucket, recovery is quick — I just pull back the last good version. That's usually a two-minute fix, which is exactly why I always make sure versioning is on in the first place.
 
-I just pull back the last good version and put it in place. That's usually a two-minute fix, which is exactly why I always make sure versioning is turned on.
-
-If there's no backup at all, it's a much longer job. I stop all changes, go through the real infrastructure one piece at a time, and rebuild the state by hand, checking after each step until nothing looks different anymore.
+If there's no backup at all, it's a much longer job. I stop all changes, go through the real infrastructure one piece at a time, and rebuild the state by hand, checking after each step until nothing looks different.
 
 </details>
 
@@ -56,15 +48,11 @@ If there's no backup at all, it's a much longer job. I stop all changes, go thro
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I don't start guessing right away, I check the basics first, in order.
-
-Is CPU or memory actually maxed out somewhere? Is the database slow, or is it the app itself? Is there a spike in traffic, or did traffic stay normal?
+I don't start guessing, I check the basics first, in order. Is CPU or memory actually maxed out somewhere? Is the database slow, or is it the app itself? Is traffic higher than normal?
 
 I also check what changed recently, since a slowdown right after a deploy almost always points back to that deploy.
 
-**Check CPU/memory → check database vs app → check traffic level → check recent deploys → deploy is the suspect, roll back first, investigate after.**
-
-If I can't find the cause quickly and the deploy is the obvious suspect, I'll just roll back first and investigate the real cause after, since restoring the service matters more than proving what broke it in the moment.
+If I can't find the cause quickly and the deploy is the obvious suspect, I'll just roll back first and investigate the real cause after — restoring the service matters more than proving what broke it in the moment.
 
 </details>
 
@@ -77,11 +65,9 @@ If I can't find the cause quickly and the deploy is the obvious suspect, I'll ju
 
 This is almost always a connection pool problem, not a network problem, so I check that first.
 
-I look at how many connections the app is actually allowed to open, versus how many the database allows in total. If many copies of the app are all running at once, they can easily add up past what the database allows.
+I look at how many connections the app is allowed to open, versus how many the database allows in total. If a lot of copies of the app are running at once, that math can easily add up past what the database allows.
 
-I also check if connections are being closed properly after use, since a leak there means the pool slowly fills up over time and never has room for new requests.
-
-Only after ruling those out would I actually suspect the network itself.
+I also check if connections are being closed properly after use, since a leak means the pool slowly fills up and never has room for new requests. Only after ruling those out would I actually suspect the network itself.
 
 </details>
 
@@ -92,15 +78,11 @@ Only after ruling those out would I actually suspect the network itself.
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I never let one slow or dead dependency block everything else.
+I never let one slow or dead dependency block everything else. I set a strict timeout on any call to an outside service, so my app doesn't just sit there waiting forever.
 
-I set a strict timeout on any call to an outside service, so my app doesn't just sit there waiting forever.
+I also add a circuit breaker — after a certain number of failures in a row, the app stops even trying to call that service for a while and fails fast instead, which protects the rest of the app.
 
-I also add a circuit breaker — after a certain number of failures in a row, the app stops even trying to call that service for a while, and fails fast instead.
-
-**Calls to the third-party API start failing → timeout kicks in fast → repeated failures trip the circuit breaker → app stops calling it → app shows cached or default data instead of crashing.**
-
-Wherever possible, I design the feature that depends on that API to degrade gracefully — like showing cached or default data — instead of the whole page failing.
+Wherever possible, I design that feature to degrade gracefully, like showing cached or default data, instead of the whole page failing just because one third-party service is having a bad day.
 
 </details>
 
@@ -111,15 +93,11 @@ Wherever possible, I design the feature that depends on that API to degrade grac
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-My first move is always to stop the bleeding, not find the root cause.
+My first move is always to stop the bleeding, not find the root cause. I'd bump up the Auto Scaling Group's desired capacity right away, so new instances come up and spread the load while I actually investigate.
 
-I'd bump up the desired capacity on the Auto Scaling Group right away, so new instances come up and spread the load while I actually investigate. That's a quick fix, not the real answer, but it buys time.
+While that's happening, I'm checking CloudWatch for CPU usage and failing health checks. Then I connect into one of the bad instances and run a live process monitor to see exactly what's eating the CPU — the app itself, a stuck database connection, or something that shouldn't be running at all.
 
-While that's happening, I'm in CloudWatch checking CPU usage and whether instances are failing health checks. Then I connect into one of the bad instances and run a live process monitor to see exactly what's eating the CPU.
-
-**Bump up Auto Scaling capacity → check CloudWatch for CPU and health checks → connect into a bad instance → find the real process → check app logs against recent deploys → apply the real fix.**
-
-Is it the app itself, a stuck database connection, or something that shouldn't be running at all? I also check the app logs, to see if this lines up with a recent deploy or a real traffic spike. The order is always the same: restore service first, then dig into why it happened.
+I also check the app logs, to see if this lines up with a recent deploy or a real traffic spike. The order is always the same — restore service first, then dig into why it happened.
 
 </details>
 
@@ -130,15 +108,11 @@ Is it the app itself, a stuck database connection, or something that shouldn't b
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-High CPU with slow reads usually means bad queries or missing indexes, not a broken database.
+High CPU with slow reads usually means bad queries or missing indexes, not a broken database. So my first stop is RDS Performance Insights — it shows me exactly which queries are using up the database's time, ranked by load.
 
-So my first stop is RDS Performance Insights — it shows me exactly which queries are actually using up the database's time, ranked by load.
+Once I find the worst one, I run it through `EXPLAIN ANALYZE` to see how it's actually being executed. Most of the time that shows a full table scan where an index should be doing the work instead, so the fix is adding an index on the right columns.
 
-Once I find the worst query, I run it through `EXPLAIN ANALYZE` to see how the database is actually executing it. Most of the time this shows a full table scan where an index should be doing the work instead.
-
-**Check Performance Insights for the worst query → run `EXPLAIN ANALYZE` → full table scan found → add the right index. Queries already efficient → it's a sizing problem → scale up or add a read replica.**
-
-So the fix is usually adding an index on the right columns, but I'm careful not to overdo this, since every index also slows down writes a little. If the queries are already efficient, I'd either scale up the instance or add a read replica.
+If the queries are already efficient and the load's just genuinely bigger than before, that's not a query problem anymore, it's a sizing problem, and I'd scale up the instance or add a read replica.
 
 </details>
 

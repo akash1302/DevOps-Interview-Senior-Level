@@ -7,17 +7,13 @@
 
 I'd start with a multi-AZ architecture, not a single big server.
 
-For the application layer, I'd use an **ALB** in public subnets, running the app in **ECS Fargate or EKS** in private subnets across at least two AZs. The ALB spreads traffic across them and drops any AZ that goes unhealthy.
+For the application layer, an **ALB** in public subnets, running the app in **ECS Fargate** in private subnets across at least two AZs, so a single AZ failure doesn't take the app down. For the database, **RDS Multi-AZ**, with **ElastiCache** in front of it for anything read-heavy so the database isn't taking the full hit on every request.
 
-For the database, **RDS/Aurora Multi-AZ**, and I'd add **ElastiCache** in front of it for anything read-heavy so the database isn't taking the full hit on every request.
+Autoscaling is based on CPU or request count — more tasks come up during a spike and scale back down once traffic drops, so I'm not paying for peak capacity all day. Static content goes through **S3 and CloudFront** so it never even hits the app servers.
 
-Autoscaling is based on CPU, memory, or request count — more tasks come up automatically during a spike, and scale back down once traffic drops, so I'm not paying for peak capacity around the clock.
+**Simple flow:** User → Route 53 → CloudFront → ALB → ECS → RDS (+ ElastiCache)
 
-Static content goes through **S3 + CloudFront**, so it's not even hitting the app servers. CloudWatch handles monitoring and alarms.
-
-**Simple flow:** User → Route 53 → CloudFront/WAF → ALB → ECS/EKS → RDS/Aurora (+ ElastiCache)
-
-**Key point:** I don't just throw bigger servers at it. I make the app horizontally scalable so it absorbs spikes without keeping expensive idle capacity running the rest of the time.
+**Key point:** I don't just throw bigger servers at it, I make the app horizontally scalable so it absorbs spikes without keeping expensive idle capacity running the rest of the time.
 
 </details>
 
@@ -28,15 +24,11 @@ Static content goes through **S3 + CloudFront**, so it's not even hitting the ap
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I land the raw files in an **S3** bucket first, since that gives me durable storage and a natural event trigger point.
+I land the raw files in **S3** first, since that gives durable storage and a natural trigger point.
 
-An S3 event triggers processing. For lightweight, fast conversions, that's a **Lambda** function straight off the event. For heavier jobs — large files, CPU-intensive conversion, anything that could run longer than Lambda's timeout — I use **AWS Batch** instead, since it can run on right-sized compute and isn't time-boxed the way Lambda is.
+An S3 event triggers processing. For light, fast conversions, that's a **Lambda** function. For heavier jobs — large files, longer processing time — I'd use **AWS Batch** instead, since it isn't time-limited the way Lambda is. If the pipeline has multiple steps, like validate, convert, then notify, I'd use **Step Functions** to orchestrate it properly instead of chaining Lambdas together by hand.
 
-If the pipeline has multiple steps — validate, convert, then notify a downstream service — I use **Step Functions** to orchestrate it, so each stage's success/failure is tracked properly instead of chaining Lambdas together by hand with custom retry logic.
-
-For decoupling from downstream consumers, converted output goes to a second S3 bucket, and an **SQS** queue notifies whatever service needs to pick it up, so a slow downstream consumer doesn't block the pipeline.
-
-**Simple flow:** Raw file → S3 → event trigger → Lambda (light) or Batch (heavy) → Step Functions orchestrates multi-step jobs → output S3 → SQS notifies downstream.
+Converted output goes to a second S3 bucket, with **SQS** notifying whatever needs to pick it up, so a slow downstream consumer doesn't block the pipeline.
 
 **Key point:** I split by workload size — Lambda for fast and small, Batch for heavy and long-running — instead of forcing everything through one tool.
 
@@ -49,17 +41,13 @@ For decoupling from downstream consumers, converted output goes to a second S3 b
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-The actual architecture depends entirely on the RTO and RPO the business is willing to state — I never design DR before getting those two numbers first.
+This really depends on the RTO and RPO the business is willing to give me — I never design a DR plan without those two numbers first.
 
-If the business can tolerate a few hours of downtime, I'd go with **pilot light** — core infrastructure like the database is replicated continuously (RDS cross-region read replica, or S3 cross-region replication for data), but the compute layer, ALB, and app servers stay switched off until an actual disaster, then get spun up from an AMI or IaC template. This keeps ongoing cost low since you're mostly just paying for storage and replication, not idle compute.
+If the business can tolerate a few hours of downtime, I'd go with a pilot light setup — the database replicates continuously to the second region, but the compute layer stays switched off until an actual disaster, then gets spun up from a template. That keeps ongoing cost low.
 
-If they need faster recovery, **warm standby** runs a smaller version of the full stack at all times in the second region, ready to scale up on failover, which costs more than pilot light but recovers in minutes instead of the time it takes to boot everything from scratch.
+If they need faster recovery, a warm standby runs a smaller version of the full stack at all times, ready to scale up on failover — costs more, but recovers in minutes instead of from scratch.
 
-I'd avoid a full active-active hot standby unless the RTO is genuinely near-zero, since running full duplicate capacity 24/7 is the most expensive option and usually isn't justified by the actual business requirement.
-
-**Simple flow:** Primary region running live → data replicated continuously to DR region (RDS replica / S3 CRR) → compute stays off or minimal in DR → Route 53 failover triggers on health check → compute scales up in DR region.
-
-**Key point:** Cost and recovery time are a direct trade-off — I match the architecture to the real RTO/RPO instead of defaulting to the most robust (and most expensive) option.
+**Key point:** Cost and recovery time are a direct trade-off, so I match the architecture to the real RTO/RPO instead of defaulting to the most expensive option.
 
 </details>
 
@@ -70,15 +58,13 @@ I'd avoid a full active-active hot standby unless the RTO is genuinely near-zero
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-For anything beyond occasional small transfers, I'd recommend **AWS Direct Connect** — it's a dedicated physical link, so it bypasses the public internet entirely, giving consistent bandwidth and lower latency, which also matters for compliance since the traffic isn't traversing shared public infrastructure.
+For anything beyond occasional small transfers, I'd recommend **AWS Direct Connect** — a dedicated physical link that bypasses the public internet entirely, giving consistent bandwidth and lower latency.
 
-For encryption on top of that link, I'd run a **VPN over Direct Connect** (or MACsec for private VIFs on newer Direct Connect connections) — Direct Connect alone gives you a private path, but it's not encrypted by default, and a lot of compliance frameworks specifically require encryption in transit regardless of whether the path is private.
+Direct Connect alone isn't encrypted by default though, and a lot of compliance requirements specifically ask for encryption in transit, so I'd run a VPN over it as well.
 
-If Direct Connect isn't justified yet — lower volume, or it's still being provisioned, which can take weeks — I'd use a **Site-to-Site VPN** with IPsec as either the primary path or a fallback, since it's encrypted by default and quick to stand up.
+If Direct Connect isn't justified yet, like for lower volume or while it's still being provisioned, a **Site-to-Site VPN** with IPsec works fine as a primary path or a fallback, since it's encrypted by default and quick to stand up.
 
-For file-based transfers specifically, like SFTP workflows from legacy on-prem systems, I'd use **AWS Transfer Family** instead of building custom infrastructure, since it gives a managed, auditable SFTP endpoint that lands directly in S3.
-
-**Key point:** Direct Connect for the dedicated path, encryption layered on top (VPN or MACsec) for compliance, VPN alone as a faster-to-provision fallback or for lower-volume needs.
+**Key point:** Direct Connect for the dedicated path, a VPN layered on top for encryption, and Site-to-Site VPN alone as a faster fallback for lower-volume needs.
 
 </details>
 
@@ -89,17 +75,13 @@ For file-based transfers specifically, like SFTP workflows from legacy on-prem s
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I don't jump straight to a bigger database instance — I check what's actually generating the load first, since scaling compute doesn't fix a genuinely bad query or a missing index.
+I don't jump straight to a bigger database instance, I check what's actually generating the load first, since scaling compute doesn't fix a bad query or a missing index.
 
-If it's read-heavy load, I add **ElastiCache** in front of the database for frequently-read data, and **RDS read replicas** for queries that need to be reasonably fresh but not necessarily the absolute latest write — reporting queries are a common one to offload this way.
+If it's read-heavy, I add **ElastiCache** for frequently read data, and **RDS read replicas** for queries that don't need the absolute latest write, like reporting.
 
-I also check connection handling — a lot of microservices setups hit connection exhaustion under load because each service instance holds its own pool, and they add up fast. I'd put **RDS Proxy** in front of the database so hundreds of app connections share a much smaller, pooled set of actual database connections.
+I also check connection handling, since a lot of microservices setups hit connection exhaustion because each instance holds its own pool. I'd put a connection pooler in front of the database so hundreds of app connections share a much smaller set of real database connections. For writes that don't need to happen synchronously, like sending a notification, I move those to a queue so the request returns fast.
 
-For write-heavy operations that don't need to happen synchronously in the request path — like sending a notification or updating an analytics table after an order is placed — I move those to **SQS** so the request returns fast and the actual database write happens asynchronously in the background.
-
-**Simple flow:** Identify read vs write vs connection-exhaustion bottleneck → reads: ElastiCache + read replicas → connections: RDS Proxy → non-critical-path writes: async via SQS.
-
-**Key point:** I fix the actual bottleneck — reads, connections, or synchronous writes — rather than reflexively resizing the database instance.
+**Key point:** I fix the actual bottleneck — reads, connections, or synchronous writes — instead of reflexively resizing the database.
 
 </details>
 
@@ -110,15 +92,13 @@ For write-heavy operations that don't need to happen synchronously in the reques
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-"Cannot tolerate any downtime" gets multi-AZ as the baseline, non-negotiable — app servers across at least two AZs behind an ALB, and **Aurora Multi-AZ** for the database so a single AZ failure doesn't take the app down.
+Multi-AZ is the non-negotiable baseline — app servers across at least two AZs behind an ALB, and RDS Multi-AZ for the database.
 
-If the tolerance is truly zero, not just "very low," I'd go further to **multi-region active-active** — Aurora Global Database for cross-region replication with fast promotion, app deployed in two regions, and **Route 53** with health-check-based failover routing so traffic shifts automatically if an entire region has a problem, not just an AZ.
+If the tolerance is truly zero, I'd go further to multi-region — the app deployed in two regions, database replicating across regions, and Route 53 doing health-check-based failover so traffic shifts automatically if an entire region has a problem.
 
-Deployments themselves also have to not introduce downtime — I'd use blue-green or rolling deployments through **CodeDeploy** or an ECS/EKS-native rolling update, never a straight swap where old and new both go down at once.
+Deployments themselves also can't introduce downtime, so I use rolling or blue-green deployments, never a straight swap. And I make sure health checks are genuinely meaningful — checking the app can actually reach its dependencies, not just that the process is running.
 
-I'd also make sure health checks are genuinely meaningful — checking that the app can actually reach its database and dependencies, not just that the process is running — since a shallow health check will happily route traffic to an instance that's technically up but functionally broken.
-
-**Key point:** True zero-downtime is a chain — multi-AZ or multi-region infrastructure, automated failover, and deployments that never take capacity below 100% at any point.
+**Key point:** True zero-downtime is a chain — multi-AZ or multi-region infrastructure, automated failover, and deployments that never drop capacity.
 
 </details>
 
@@ -129,15 +109,13 @@ I'd also make sure health checks are genuinely meaningful — checking that the 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Data at rest gets encrypted with **SSE-KMS**, using a customer-managed key rather than the default AWS-managed key, since a customer-managed key gives me control over rotation and lets me see exactly who used it via CloudTrail.
+Data at rest gets encrypted with a customer-managed KMS key, not the default one, so I control rotation and can see exactly who used it in CloudTrail.
 
-Access is locked down with a tight **bucket policy** plus **IAM policies** scoped to exactly what each role needs — no wildcard `s3:*` on sensitive buckets. I'd also add a bucket policy condition that denies any request not coming over TLS, so encryption in transit is enforced, not just assumed.
+Access is locked down with a tight bucket policy and IAM policies scoped to exactly what each role needs, and I add a condition that denies any request not coming over TLS.
 
-For auditing, I turn on **CloudTrail data events** specifically for that bucket — management events are on by default, but object-level read/write access needs data events explicitly enabled, and that's the actual audit trail that shows who read a specific object and when.
+For auditing specifically, I turn on CloudTrail data events for that bucket, since management events alone don't cover object-level read and write access — that's the actual audit trail showing who read a specific object and when.
 
-On top of that, **GuardDuty** and **Macie** — GuardDuty flags anomalous access patterns, like an access key suddenly reading from an unusual location, and Macie scans the bucket to confirm sensitive data isn't sitting somewhere it shouldn't, or exposed more broadly than intended.
-
-**Key point:** Encryption alone isn't the control — the real requirement here is the audit trail, so CloudTrail data events on that specific bucket are the piece I never skip.
+**Key point:** Encryption alone isn't the control, the audit trail is the real requirement here, so CloudTrail data events on that bucket are the piece I never skip.
 
 </details>
 
@@ -148,15 +126,11 @@ On top of that, **GuardDuty** and **Macie** — GuardDuty flags anomalous access
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I'd wire it as: source triggers build, build produces an artifact, artifact gets deployed — whether that's native AWS tooling or GitHub Actions/GitLab CI, the shape is the same.
+Source triggers a build, the build produces an artifact, and the artifact gets deployed — that's the shape regardless of which tools are involved.
 
-Source is Git-based, triggering on a PR merge to the target branch. Build runs in **CodeBuild** (or the CI platform's own runners) — install, test, build the container image, push to **ECR**. I always run the security scan and unit tests at this stage, before anything gets close to deployment, so a bad build fails fast and cheap.
+Source is Git-based, triggering on a merge to the target branch. The build step installs, tests, builds the image, and pushes it to a registry — I always run security scans and tests here, before anything gets near deployment, so a bad build fails fast and cheap.
 
-Deployment goes through **CodeDeploy** for ECS/EC2, doing a blue-green or rolling rollout, or through an ArgoCD-style GitOps flow if it's EKS. Either way, production is gated behind manual approval, never auto-deployed straight from a merge.
-
-For the AWS access itself, the pipeline authenticates via **OIDC** to assume a short-lived, tightly-scoped IAM role — no long-lived access keys stored in the CI system.
-
-**Simple flow:** PR merges → CodeBuild builds & tests → image pushed to ECR → CodeDeploy/ArgoCD deploys → manual approval gate before production → OIDC-based short-lived credentials throughout.
+Deployment goes through a rolling or blue-green rollout, and production is always gated behind manual approval, never auto-deployed straight from a merge. The pipeline authenticates using short-lived, tightly scoped credentials, not a long-lived access key stored in CI.
 
 **Key point:** Production is always gated behind human approval, and the pipeline never holds a long-lived AWS credential.
 
@@ -169,15 +143,13 @@ For the AWS access itself, the pipeline authenticates via **OIDC** to assume a s
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-First, I confirm it's actually distance-driven latency and not a backend bottleneck — checking CloudFront/ALB metrics by region tells me quickly whether it's genuinely the physical distance to the origin or something else entirely.
+First I confirm it's actually distance-driven latency and not a backend bottleneck, by checking metrics broken down by region.
 
-If it is distance, **CloudFront** in front of the app is the first move — its edge locations cache static and cacheable content close to users, so a big chunk of requests never have to reach the origin region at all.
+If it is distance, **CloudFront** in front of the app is the first move — its edge locations cache content close to users, so a lot of requests never reach the origin region at all.
 
-For requests that do need to hit the backend — dynamic, non-cacheable ones — I'd consider actually deploying a regional stack in or near that geography if the traffic volume justifies it, with **Route 53 latency-based routing** sending users to whichever region is actually fastest for them.
+For requests that genuinely need to hit the backend, I'd consider deploying a regional stack near that geography if traffic volume justifies it, with latency-based routing sending users to whichever region is fastest for them.
 
-For anything involving large file uploads specifically, like user-submitted media, **S3 Transfer Acceleration** routes the upload through the nearest CloudFront edge instead of going directly to the bucket's home region over the public path, which noticeably helps for users far from that region.
-
-**Key point:** CDN first for anything cacheable, since it's the cheapest and fastest fix — a full regional deployment is the next step up only if dynamic traffic volume from that region actually justifies the cost.
+**Key point:** A CDN first for anything cacheable, since it's the cheapest and fastest fix — a full regional deployment is the next step up only if it's actually justified.
 
 </details>
 
@@ -188,15 +160,13 @@ For anything involving large file uploads specifically, like user-submitted medi
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I don't manage this with individual IAM users — that doesn't scale past a handful of people. I use IAM roles tied to groups (or federated through IAM Identity Center if it's tied to the company's SSO), so access is managed by group membership, not per-person policy edits.
+I don't manage this with individual IAM users, that doesn't scale past a handful of people. I use IAM roles tied to groups, so access is managed by group membership, not per-person policy edits.
 
-For actual fine-grained control — different teams needing access to different prefixes within the same bucket — I use **S3 Access Points** scoped per team or use case, each with its own policy, rather than one giant bucket policy trying to express every team's rules in one place. That also makes it much easier to reason about and audit who can touch what.
+For real fine-grained control, like different teams needing access to different parts of the same bucket, I use **S3 Access Points** scoped per team, each with its own policy, rather than one giant bucket policy trying to express every team's rules.
 
-Policies are scoped down to the specific prefix and action a role actually needs — `s3:GetObject` on `team-a/*` for team A, nothing broader — and I use policy conditions where it matters, like restricting access to a specific VPC endpoint so the bucket can't be reached from outside the company network at all.
+Policies are scoped to the specific action and path a role actually needs, nothing broader, and I review access on a schedule, since permissions pile up over time as people change roles.
 
-As the user count grows, I review access on a schedule, not just when someone happens to ask — permissions accumulate over time as people change roles, and nobody proactively removes the old ones unless it's a standing process.
-
-**Key point:** Access points plus prefix-scoped, condition-restricted IAM policies — not one broad bucket policy trying to cover every team's access pattern.
+**Key point:** Access points plus tightly scoped IAM policies, not one broad bucket policy trying to cover every team's access pattern.
 
 </details>
 
@@ -207,15 +177,11 @@ As the user count grows, I review access on a schedule, not just when someone ha
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-**ECS with Fargate** is what I'd default to here — it's exactly built for this, containers run without me provisioning or patching any EC2 instances underneath them at all.
+**ECS with Fargate** is what I'd default to — containers run without me provisioning or patching any EC2 instances underneath at all.
 
-Autoscaling is based on CPU, memory, or a custom CloudWatch metric like request count per target, and Fargate just launches more tasks to match, without me managing a node group's capacity the way I would on EC2-backed ECS or a self-managed EKS cluster.
+Autoscaling is based on CPU, memory, or a custom metric like request count, and Fargate just launches more tasks to match, without me managing node capacity myself.
 
-If the team is already committed to Kubernetes specifically — for portability, or existing tooling built around the Kubernetes API — **EKS with Fargate profiles** gives the same "no server management" benefit while staying on Kubernetes, though I'd flag that Fargate on EKS has some real constraints, like no DaemonSets and no privileged containers, so it's not a drop-in replacement for every EKS workload.
-
-For most teams not already deep into Kubernetes tooling, I'd steer toward plain ECS Fargate — it's simpler to operate day to day and there's less platform overhead to maintain.
-
-**Key point:** ECS Fargate is the default answer for "containers, autoscaling, no server management" — EKS Fargate only if there's a real, existing reason the team needs Kubernetes specifically.
+If the team's already committed to Kubernetes specifically, EKS with Fargate profiles gives the same benefit, though it does come with some real constraints, like no DaemonSets. For most teams not already deep into Kubernetes, I'd steer toward plain ECS Fargate, since it's simpler to operate day to day.
 
 </details>
 
@@ -226,15 +192,11 @@ For most teams not already deep into Kubernetes tooling, I'd steer toward plain 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-**S3 Glacier** or **Glacier Deep Archive**, depending on how rarely it's actually accessed and how fast retrieval needs to be if it ever is.
+S3 Glacier or Glacier Deep Archive, depending on how rarely it's accessed and how fast retrieval needs to be.
 
-I don't manually move data there — I set up an **S3 Lifecycle policy** on the source bucket, so objects transition automatically after a defined age, like moving to Glacier after 90 days and Deep Archive after a year. That way nobody has to remember to do it, and it happens consistently across every object, not just the ones someone thought to move by hand.
+I don't move data there manually, I set up an S3 lifecycle policy so objects transition automatically after a defined age, so nobody has to remember to do it, and it happens consistently.
 
-If retrieval time actually matters — some compliance audits do need data back within hours, not the 12+ hours Deep Archive can take — I'd use regular Glacier with expedited retrieval instead, which costs more per retrieval but gets data back in minutes when genuinely needed.
-
-For compliance specifically, I also enable **S3 Object Lock** in compliance mode on that bucket, so data genuinely cannot be deleted or overwritten before the retention period ends, by anyone, including the account root — that's often the actual requirement compliance is asking for, not just "cheap storage."
-
-**Key point:** Lifecycle policy for automatic tiering, Object Lock in compliance mode for the actual retention guarantee auditors are checking for.
+For compliance specifically, I'd also enable S3 Object Lock in compliance mode, so data genuinely can't be deleted or overwritten before the retention period ends, by anyone — that's usually the actual requirement compliance is asking for, not just cheap storage.
 
 </details>
 
@@ -245,15 +207,13 @@ For compliance specifically, I also enable **S3 Object Lock** in compliance mode
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-If these only need to run during business hours, the biggest single win is just not running them the rest of the time — I'd set up a scheduled stop/start using **EventBridge scheduled rules triggering a Lambda**, or the AWS Instance Scheduler solution if it's a larger fleet, so instances shut down every evening and weekend and start back up before the business day.
+If these only need to run during business hours, the biggest single win is not running them the rest of the time — a scheduled stop and start, so instances shut down every evening and weekend and start back up before the business day.
 
-That alone is often a 60-70% reduction on that fleet's compute cost, since roughly two-thirds of the week is outside business hours, and it doesn't touch performance at all during the hours anyone's actually using them.
+That alone is often a 60 to 70% reduction on that fleet's compute cost, and it doesn't touch performance during the hours anyone's actually using them.
 
-On top of the schedule, I'd right-size the instances — checking real CPU and memory usage against what's provisioned, since these are non-critical workloads and are often over-provisioned from an initial rough guess that nobody revisited.
+On top of the schedule, I'd right-size the instances, checking real usage against what's provisioned, since non-critical workloads are often over-provisioned from an initial guess nobody revisited.
 
-If the workload can tolerate interruption, I'd also consider **Spot Instances** for the business-hours window itself, since non-critical is usually a reasonable signal that occasional interruption is acceptable, stacking further savings on top of the scheduling.
-
-**Key point:** Scheduled shutdown outside business hours is the biggest lever by far — right-sizing and Spot are the next layer on top of that, not a replacement for it.
+**Key point:** Scheduled shutdown outside business hours is the biggest lever by far, right-sizing is the next layer on top of that.
 
 </details>
 
@@ -264,15 +224,11 @@ If the workload can tolerate interruption, I'd also consider **Spot Instances** 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-For data at rest, I enable **KMS encryption** across every storage layer that touches the data — S3 with SSE-KMS, RDS/EBS with KMS-backed encryption at the volume or instance level. I use a customer-managed key rather than the AWS-managed default so I control rotation and can see key usage in CloudTrail.
+For data at rest, I enable KMS encryption across every storage layer that touches the data, using a customer-managed key so I control rotation and can see key usage in CloudTrail.
 
-For data in transit, TLS is enforced end to end — **ACM** issues and manages the certificate on the ALB, so the app doesn't have to handle certificate renewal manually, and I set the ALB listener to redirect any plain HTTP request to HTTPS rather than silently accepting it.
+For data in transit, TLS is enforced end to end — a certificate on the ALB, with any plain HTTP request redirected to HTTPS rather than accepted. I also make sure this applies internally between services, not just at the public edge, since that's a common gap.
 
-Internally, between services, I also enforce TLS for service-to-service traffic where it carries sensitive data, not just at the public-facing edge — it's a common gap to encrypt the outside and assume internal VPC traffic is automatically safe.
-
-To make sure this isn't just a one-time setup, I enforce it structurally — an S3 bucket policy that denies any request not made over TLS, and for a stricter environment, an SCP at the AWS Organizations level that blocks creating unencrypted resources in the first place, so it's not dependent on every engineer remembering to tick the encryption box.
-
-**Key point:** Encryption enforced structurally, through policy conditions and SCPs, not just configured once and trusted to stay that way.
+To make sure this isn't just a one-time setup, I enforce it structurally, like a bucket policy that denies any request not made over TLS, so it's not dependent on every engineer remembering to tick the box.
 
 </details>
 
@@ -283,17 +239,13 @@ To make sure this isn't just a one-time setup, I enforce it structurally — an 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-**AWS DMS** with continuous replication (CDC) is what I'd use here, not a one-shot dump-and-restore, since a straight export/import on a large database means real downtime for however long that transfer takes.
+I'd use **AWS DMS** with continuous replication, not a one-shot export and import, since a straight dump-and-restore on a large database means real downtime for however long that transfer takes.
 
-DMS does an initial full load of the existing data into the target RDS/Aurora instance, and once that's done, it switches to change data capture, continuously replicating new writes from the on-prem database as they happen, so the target stays in sync while the source database keeps running normally the whole time.
+DMS does an initial full load into the target database, then switches to continuously replicating new changes from the source, so the target stays in sync while the source keeps running normally.
 
-Cutover happens during a short, planned maintenance window — I stop writes to the source, let DMS catch up the last few seconds or minutes of changes, point the application at the new AWS database, and resume traffic. That window is usually minutes, not the hours a full migration would otherwise take.
+Cutover happens in a short, planned window — stop writes to the source, let DMS catch up the last few changes, point the app at the new database, and resume traffic. I always test the cutover against a staging copy first and check data consistency before the real cutover, not after.
 
-I always test the actual cutover process against a staging copy first, and I validate data consistency between source and target with a checksum or row-count comparison before the real cutover, not after — finding a data mismatch after production traffic has already moved is a much worse day than catching it in a rehearsal.
-
-**Simple flow:** DMS full load → CDC keeps target in sync with ongoing writes → short maintenance window → final catch-up → cutover app to new database → validate.
-
-**Key point:** CDC-based replication is what turns a normally multi-hour migration into a cutover window measured in minutes.
+**Key point:** Continuous replication is what turns a normally multi-hour migration into a cutover window measured in minutes.
 
 </details>
 

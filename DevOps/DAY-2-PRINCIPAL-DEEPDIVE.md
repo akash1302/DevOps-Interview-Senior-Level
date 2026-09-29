@@ -34,8 +34,6 @@ The 502s happen for a different reason. Even when the PDB allows the eviction, t
 
 The CPU throttling shows up because the Linux scheduler checks CPU usage in very short windows, like every 100 milliseconds, not over a full minute. A pod can look like it's using 40% CPU on average, but still get throttled if it bursts to 100% for just one of those short windows.
 
-**Drain runs node by node → PDB blocks a second eviction until the first is healthy → pod gets a short delay before shutdown so the load balancer finishes deregistering it first → CPU limits set with real headroom above burst usage, not just average.**
-
 The fix is to drain nodes one at a time instead of in parallel, add a short delay before the pod actually shuts down so the load balancer has time to catch up, and set the CPU limit based on real burst usage instead of the average shown in basic monitoring.
 
 </details>
@@ -54,8 +52,6 @@ These are two separate problems that just happened to show up around the same ti
 The image bloat happens because the final stage is copying the entire build folder, not just the compiled file. That drags along test files, dev dependencies, and build caches that were never meant to reach production.
 
 The permission error is a user ID mismatch, not a real permissions bug. In rootless mode, the container's internal user ID gets mapped to a different, real user ID on the host. On a laptop, that mapped ID happens to match the developer's own user by coincidence, so it looks like it "just works." In CI, the mapping is completely different, so the same command fails.
-
-**Copy only the compiled file in the final stage → image shrinks from 1.4GB to a few MB. Match host folder ownership to the container's actual mapped user ID → permission error goes away in CI too.**
 
 The fix for the image is only copying the final compiled file into a clean, minimal final stage. The fix for the permission error is setting the host folder's ownership to match the real, mapped user ID the rootless container actually uses, not whatever ID happens to work on someone's laptop.
 
@@ -76,8 +72,6 @@ The accounts themselves were isolated for safety, but the ArgoCD control plane m
 
 There was also no locking around promotions between environments, so it assumed there'd always be enough capacity, which broke the moment a real storm hit.
 
-**One shared chart change → syncs are rolled out in waves instead of all at once → each wave has to be healthy before the next one starts → production stays gated behind a manual approval, unaffected by the storm.**
-
 The fix is rolling changes out in controlled waves instead of all at once, giving the ArgoCD control plane enough dedicated capacity per environment so one storm can't starve another, and requiring an explicit approval step before anything reaches production instead of letting it happen automatically from a shared chart bump.
 
 </details>
@@ -97,8 +91,6 @@ The wrong-region resolution happens because there's a single DNS record shared a
 
 The Lambda DNS failures come from a hard limit on how many DNS lookups a single network interface can handle per second. When a lot of Lambda functions cold-start at once, they can briefly go over that limit, and the extra lookups just get dropped silently, with nothing logged, because the limit is enforced at the network layer, not the DNS service itself.
 
-**Add a routing policy so each region's traffic prefers the nearest healthy region → wrong-region resolution stops. Reduce DNS lookups per Lambda cold start by reusing connections outside the handler → fewer lookups per burst → limit stops getting hit.**
-
 The fix for the DNS routing is adding a real routing policy, like latency-based or failover, so each region's traffic actually prefers a healthy, nearby target instead of a flat shared record. The fix for the Lambda issue is cutting down how many DNS lookups happen per cold start, by reusing SDK clients and connections outside the function handler instead of setting them up on every single call.
 
 </details>
@@ -117,8 +109,6 @@ This is a classic case of adding the wrong kind of label to a metric, and it gro
 Prometheus creates a completely separate tracked series for every unique combination of label values. Adding something like a raw URL or a user ID means every different user and every different path creates a brand new series, and that multiplies fast, not just adds up a little.
 
 It gets worse specifically because the metric involved is a histogram, which already creates several series per request on its own, so a bad label on a histogram is much more damaging than the same label on a simple counter.
-
-**New high-cardinality label added → series count explodes → memory climbs → Prometheus gets OOM-killed → drop the bad label at the scrape config immediately → fix the actual label in the app code → add a limit so it can't happen silently again.**
 
 The immediate fix is dropping that specific label at the scrape configuration level, so it stops flowing in right away. The real fix is in the application code — using a general route pattern instead of the raw URL, and removing the user ID from metrics entirely, since that kind of per-user detail belongs in logs, not in a metric label. Going forward, I'd also add a hard limit on how many data points one target can send, so a mistake like this fails loudly and immediately instead of quietly filling up memory over a few hours.
 

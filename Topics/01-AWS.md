@@ -5,15 +5,13 @@
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I build the VPC across two or more zones, so if one zone goes down, the app still works.
+In my experience, I build the VPC across at least two availability zones, so if one zone goes down, the app still works.
 
-I use three layers of subnets. Public subnets hold the load balancer. Private subnets hold the app servers. A separate database subnet holds RDS, with no internet access at all.
+I use three layers of subnets. Public subnets hold the load balancer. Private subnets hold the app servers. A separate database subnet holds RDS, with no direct internet access at all.
 
-The app servers can go out to the internet through a NAT Gateway, but nothing from outside can come in to them directly.
+The app servers can reach out to the internet through a NAT Gateway when they need to, but nothing from outside can reach them directly.
 
-**Internet → public subnet (ALB) → private subnet (app servers) → database subnet (RDS, no internet access).**
-
-I also add Security Groups and NACLs, so even traffic between layers is controlled.
+For example, on a project I worked on, this setup meant when one AZ had an issue, traffic just shifted to the healthy AZ and nobody noticed. I also add Security Groups and NACLs so even traffic between layers is controlled, not just traffic coming from outside.
 
 </details>
 
@@ -24,15 +22,11 @@ I also add Security Groups and NACLs, so even traffic between layers is controll
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-VPC Peering connects two VPCs directly. It's simple and cheap for a few VPCs.
+VPC Peering connects two VPCs directly. It's simple and cheap when you only have a few VPCs.
 
-But it does not pass through. If A is connected to B, and B is connected to C, A still cannot reach C.
+The catch is it doesn't pass through — if A is peered to B, and B is peered to C, A still can't reach C. So once you have many VPCs, you end up managing a lot of separate connections by hand.
 
-So with many VPCs, you need a lot of separate connections, and that gets hard to manage.
-
-Transit Gateway solves this. It works like a hub — every VPC connects to the hub once, and the hub handles all the routing.
-
-I use Transit Gateway once we have more than a few VPCs to connect.
+What I normally do once it gets past a handful of VPCs is move to Transit Gateway. It works like a hub — every VPC connects to it once, and the hub handles the routing centrally, so I'm not managing dozens of point-to-point connections myself.
 
 </details>
 
@@ -43,13 +37,11 @@ I use Transit Gateway once we have more than a few VPCs to connect.
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Dynamic Scaling watches live metrics, like CPU, and adds servers after usage goes up. It works, but new servers take a little time to start, so there's a short delay.
+Dynamic Scaling watches a live metric, usually CPU, and adds servers after usage actually goes up. It works, but new servers take a little time to start, so there's always a short delay before capacity catches up.
 
-Predictive Scaling is different. It looks at past traffic patterns and adds servers *before* the expected spike.
+Predictive Scaling is different — it looks at past traffic patterns and adds servers ahead of an expected spike, before it even hits.
 
-**Past traffic pattern found → Predictive Scaling adds capacity ahead of time → real spike hits → Dynamic Scaling catches anything extra and unplanned.**
-
-I use both together — Predictive Scaling for traffic I can plan for, and Dynamic Scaling for anything sudden.
+What I normally do is run both together. Predictive Scaling handles traffic I can plan for, like a daily peak, and Dynamic Scaling is still there to catch anything sudden and unplanned, like a flash sale.
 
 </details>
 
@@ -60,13 +52,13 @@ I use both together — Predictive Scaling for traffic I can plan for, and Dynam
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-This is about where AWS physically places your servers, and the right choice depends on the workload.
+This is about where AWS physically places your servers, and I pick based on what the workload actually needs.
 
-If I need very fast, low-delay communication between servers, I use **Cluster** placement — it puts them close together on the same hardware.
+If I need very fast, low-delay communication between servers, like for a big data job, I use Cluster placement — it packs them close together on the same hardware.
 
-If I have a few critical servers that must never fail at the same time, I use **Spread** placement — it puts each one on separate hardware.
+If I have a few critical servers that must never fail together, like a small control plane, I use Spread placement — each one goes on separate hardware.
 
-If I'm running something like Kafka, where I want failures grouped and isolated, I use **Partition** placement — it splits servers into separate groups.
+For example, for something like Kafka, where I want failures grouped and isolated rather than spread randomly, I'd use Partition placement instead.
 
 </details>
 
@@ -77,13 +69,11 @@ If I'm running something like Kafka, where I want failures grouped and isolated,
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-By default, a private server reaches S3 through the NAT Gateway, and that costs money for every bit of data sent.
+By default, a private server reaches S3 through the NAT Gateway, and that costs money for every bit of data that passes through it.
 
-Instead, I add an S3 Gateway Endpoint to the subnet. This lets the server reach S3 directly, inside AWS's own network, skipping the NAT Gateway completely.
+What I normally do instead is add an S3 Gateway Endpoint to the subnet. That lets the server reach S3 directly inside AWS's own network, skipping the NAT Gateway completely.
 
-It's cheaper and faster. We used this on a pipeline that moved a lot of data to S3 every day, and it saved real money.
-
-I also add a policy to the endpoint, so that subnet can only reach specific buckets, not all of S3.
+For example, we had a pipeline moving a lot of data to S3 every day, and just adding the endpoint saved real money on NAT charges, and it was faster too. I also attach a policy to the endpoint so that subnet can only reach specific buckets, not all of S3.
 
 </details>
 
@@ -94,13 +84,11 @@ I also add a policy to the endpoint, so that subnet can only reach specific buck
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Multi-AZ is for staying up if something breaks. It keeps a live copy of the database in a second zone.
+Multi-AZ is for staying available if something breaks. It keeps a live standby copy of the database in a second zone, and if the main one fails, AWS switches over automatically. You never query that standby directly, it just sits ready.
 
-If the main one fails, AWS switches over to the copy automatically. You never actually query that second copy directly, it just sits ready as a backup.
+A Read Replica is for a different problem — handling more traffic, not backup. It's a separate copy you can actually send read queries to, so heavy reporting doesn't slow down the main database.
 
-A Read Replica is different — it's for handling more traffic, not for backup. It's a separate copy you can actually send read queries to, so heavy reporting doesn't slow down the main database.
-
-In a real setup, I usually use both together — Multi-AZ for safety, and one or more Read Replicas to spread out read traffic.
+In a real setup, I usually run both together — Multi-AZ for safety, and one or more Read Replicas to spread out read traffic.
 
 </details>
 
@@ -111,13 +99,11 @@ In a real setup, I usually use both together — Multi-AZ for safety, and one or
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I never give engineers a personal AWS access key that sits around forever.
+I never give engineers a personal AWS access key that just sits around forever.
 
-Instead, I use AWS Organizations to keep separate accounts for each environment, like dev and prod, so a mistake in dev can't touch prod at all.
+What I normally do is use AWS Organizations to keep separate accounts per environment, like dev and prod, so a mistake in dev can't touch prod at all.
 
-For access, people log in once through a central identity system, and then assume a role that only lasts a short time, instead of having a permanent key.
-
-I also start every role with the least access it needs, and only add more if someone actually asks for it and it makes sense.
+For access, people log in once through the company's identity system and assume a role that only lasts a short time, instead of having a permanent key. I also start every role with the least access it actually needs, and only add more if someone specifically asks for it and it makes sense.
 
 </details>
 
@@ -128,15 +114,11 @@ I also start every role with the least access it needs, and only add more if som
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I start by actually looking at what's being paid for, using AWS's own cost tools, instead of guessing.
+First I check what's actually being paid for, using AWS's own cost tools, instead of guessing.
 
-A lot of savings come from easy wins first — deleting unused storage volumes, old snapshots nobody needs, and load balancers nobody's using anymore.
+A lot of savings come from easy wins first — unused storage volumes, old snapshots nobody needs, load balancers nobody's using anymore. Then I look at right-sizing, checking if servers are actually using the CPU and memory they're paying for.
 
-Then I look at right-sizing — checking if servers are actually using the CPU and memory they're paying for, and downsizing the ones that aren't.
-
-For steady, predictable workloads, I'll buy savings plans or reserved capacity, since that's cheaper than paying full price all the time.
-
-I avoid cutting things that affect reliability just to save money — the goal is removing waste, not removing safety.
+For steady, predictable workloads, I'll move to savings plans or reserved capacity, since that's cheaper than paying full price all the time. I'm careful not to cut anything that affects reliability just to save money — the goal is removing waste, not removing safety.
 
 </details>
 
@@ -147,15 +129,11 @@ I avoid cutting things that affect reliability just to save money — the goal i
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I go straight to Cost Explorer first and group the spend by service, comparing this month against last month.
+First I go to Cost Explorer and group the spend by service, comparing this month against last month. That usually tells me right away which service caused the jump, so I'm not guessing across the whole account.
 
-That one view usually tells me immediately which service caused the jump — most of the time it's EC2, data transfer, or S3.
+If it's EC2, I check for things like old dev instances nobody shut down, or an autoscaling setting that's too aggressive. If it's S3, I check for a flood of small objects driving up request costs, or a lifecycle rule that quietly failed. If it's data transfer, I check for traffic going out to the internet or across regions that shouldn't be happening.
 
-If it's EC2, I check for things like old dev instances nobody shut down, or an Auto Scaling policy that's too aggressive. If it's S3, I check for a flood of tiny objects driving up request costs, or lifecycle rules that failed silently. If it's data transfer, I check VPC Flow Logs for large transfers going out to the internet or across regions.
-
-**Group cost by service → find the biggest jump → check that service's usual suspects → confirm the exact resource → tag it and set budget alerts.**
-
-Once I find the actual resource, I tag it properly, and I set up budget alerts and cost anomaly detection, so next time we get a warning within a day, not a surprise a month later.
+Once I find the actual resource, I tag it properly and set up a budget alert, so next time it's caught within a day, not as a surprise a month later.
 
 </details>
 

@@ -109,8 +109,6 @@ The first thing I check is the task's execution role, since it needs specific pe
 
 If the permissions check out, I go look at the task definition itself — is the logging driver actually set correctly, and is the log group name spelled right, since a typo there fails silently.
 
-**Check execution role permissions → check logging driver and log group name in the task definition → check CloudWatch account limits → check ECS service events for the real error.**
-
 I'd also check if we've hit an account-level limit on CloudWatch. And if the task itself is failing to even start properly, I'd check the ECS service events directly, since those often show the real reason in plain language.
 
 </details>

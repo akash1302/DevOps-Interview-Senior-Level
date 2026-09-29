@@ -7,7 +7,7 @@
 ![Format](https://img.shields.io/badge/format-Markdown-informational)
 ![Stack](https://img.shields.io/badge/stack-AWS%20%7C%20K8s%20%7C%20Terraform%20%7C%20CI%2FCD-success)
 
-Simple, plain-English candidate answers — short paragraphs, the way you'd actually walk through it out loud in an interview.
+Simple, natural, first-person candidate answers — the way an experienced engineer actually talks in an interview.
 
 </div>
 
@@ -36,7 +36,7 @@ This README covers 14 core domains as one continuous reference (table of content
 | 15 | Cost Optimization / FinOps | [`Topics/15-Cost-Optimization-FinOps.md`](./Topics/15-Cost-Optimization-FinOps.md) |
 | 16 | AWS Scenario-Based | [`Topics/16-AWS-Scenario-Based.md`](./Topics/16-AWS-Scenario-Based.md) |
 
-Each topic file uses plain-English, first-person candidate answers in `<details>` flashcards, same style as this README.
+Each topic file uses the same style of answers as this README.
 
 | Day | Focus | File |
 |-----|-------|------|
@@ -67,15 +67,13 @@ Each topic file uses plain-English, first-person candidate answers in `<details>
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-There are three volume types, and each one behaves differently once you're in production.
+In my experience, there are three types I deal with. A **bind mount** maps a folder from the host straight into the container — it's fast, but the container can now see real host files, and I've had permission issues because the container's user ID didn't match the host folder's owner.
 
-A **bind mount** connects a folder on the host straight into the container. It's fast, but the container can now see real host files, and file ownership can get messy.
+A **named volume** is managed fully by Docker, so it's safer, and it doesn't get wiped by a normal cleanup command. This is what I use for anything stateful, like a database.
 
-A **named volume** is fully managed by Docker. It's the safe choice, and it doesn't get deleted by normal cleanup commands.
+An **anonymous volume** is similar but has no name, so it's easy to forget and it can quietly use up disk space over time.
 
-An **anonymous volume** is like a named one, but with no name, so it's easy to forget about, and it can quietly fill up disk space over time.
-
-In our case, we always use named volumes for anything like a database, since that's the option Docker actually tracks and protects.
+So my rule is simple: named volumes for anything I need to keep, and I check for leftover anonymous volumes on the host every so often.
 
 </details>
 
@@ -86,17 +84,11 @@ In our case, we always use named volumes for anything like a database, since tha
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-This comes down to which one actually becomes the container's main process.
+`ENTRYPOINT` is the main process that runs. `CMD` just gives it default arguments.
 
-`ENTRYPOINT` is the main command that runs. `CMD` just gives it default arguments.
+What I normally check for is the format. If someone writes `CMD npm start` as plain text instead of the array form, Docker runs it inside a shell, and that shell becomes the main process instead of the app itself. So when Docker tries to stop the container, the app never gets the stop signal, and the container just hangs until it's force-killed.
 
-The problem shows up if you write `CMD npm start` as plain text instead of the list format. Docker wraps that in a shell, and the shell becomes the main process instead of your app.
-
-So when Docker tries to stop the container the normal way, the app never actually gets the shutdown signal, and it just hangs until it's force-killed.
-
-**Plain text `CMD` → shell becomes PID 1 → app never sees the stop signal → container hangs → gets force-killed.**
-
-In our case, the fix was switching to the list format everywhere, like `ENTRYPOINT ["node", "server.js"]`, so shutdown works properly.
+For example, I had exactly this issue once — the container looked fine in testing but never shut down cleanly in production. The fix was switching to the array format, like `ENTRYPOINT ["node", "server.js"]`, so the app itself receives the signal directly.
 
 </details>
 
@@ -107,13 +99,11 @@ In our case, the fix was switching to the list format everywhere, like `ENTRYPOI
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-This isn't a bug, it's expected behavior once you know how container storage actually works.
+This isn't really a bug, it's expected behavior once you understand it. Every container has its own writable space, and that space gets removed when the container itself is removed, not just stopped.
 
-Every container has its own storage space, and that space gets wiped when the container is removed, not just stopped.
+So if the app writes data to a path with no volume attached, that data was never going to survive a restart in the first place.
 
-If the app wrote data to a path with no volume attached, that data was never going to survive a restart in the first place.
-
-In our case, the fix was simple — mount a real volume, or a `PersistentVolumeClaim` in Kubernetes, at every single path the app actually needs to keep.
+What I normally do is mount a real volume, or a PersistentVolumeClaim in Kubernetes, at every path the app actually needs to keep. I don't assume I know every path — I check the running container to see exactly where it's writing before trusting the setup.
 
 </details>
 
@@ -124,13 +114,11 @@ In our case, the fix was simple — mount a real volume, or a `PersistentVolumeC
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I never run a full cleanup command blindly, especially on a CI server.
+I never run a full cleanup command blindly, especially on a CI server. I've seen it wipe out a build cache another job still needed, which just made builds slower for no reason.
 
-It clears out every image that isn't currently in use, and that can delete a build cache another job still needs, which just slows everything down for no reason.
+What I normally do instead is clean up in a targeted way — only images older than a few days, so recent work is never touched.
 
-Instead, I clean up in a targeted way — only images older than a certain age, for example, so recent work is never touched.
-
-I also track disk usage as a real metric, so I catch a problem early, instead of finding out when a build suddenly fails.
+For example, on CI runners, I keep the build cache on its own separate volume, so a cleanup job can't accidentally remove it. I also keep an eye on disk usage as a regular check, so I catch it early instead of finding out when a build fails.
 
 </details>
 
@@ -143,13 +131,11 @@ I also track disk usage as a real metric, so I catch a problem early, instead of
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-This is really about scheduling only, not security, and that distinction matters a lot.
+A taint on a node stops pods from being scheduled there. A toleration on a pod just allows it to get past that block — it doesn't force the pod onto that node.
 
-A **taint** on a node blocks pods from being placed there. A **toleration** on a pod just lets it get past that block — it doesn't force the pod to go there.
+This only controls scheduling, it's not a security boundary. A pod that's already running, or one placed a different way, isn't affected by a taint at all.
 
-A pod placed some other way, or one that's already running, isn't stopped by a taint at all, since it only checks at scheduling time.
-
-If I actually need dedicated nodes, I pair the taint with **node affinity** too. If I need real isolation, I add a `NetworkPolicy` on top of that.
+In my experience, if I actually need dedicated nodes, I pair the taint with node affinity as well, so the pod is required to go there, not just allowed. If I need real isolation, I add a NetworkPolicy on top of that too.
 
 </details>
 
@@ -160,13 +146,11 @@ If I actually need dedicated nodes, I pair the taint with **node affinity** too.
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Yes, by default every pod can talk to every other pod. There's no restriction out of the box.
+Yes, by default any pod can talk to any other pod in the cluster. There's no restriction unless you add one.
 
-The common mistake, the first time someone turns on a deny-all rule, is that it breaks DNS. The DNS service lives in a different namespace, and it needs its own explicit rule to still be allowed through.
+What I normally see happen the first time someone turns on a deny-all policy is DNS breaks immediately, because the DNS service sits in a different namespace and needs its own explicit rule to still be allowed.
 
-**Deny-all policy applied → DNS lookups start failing → app can't resolve any service name → everything looks broken.**
-
-So I always test this in a non-production namespace first, and I add a clear rule allowing DNS traffic before rolling it out anywhere else.
+So I always test this in a non-production namespace first, and I add a clear rule allowing DNS traffic as part of the same change, not as a fix afterward.
 
 </details>
 
@@ -177,15 +161,11 @@ So I always test this in a non-production namespace first, and I add a clear rul
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-This comes down to identity and storage, not just how pods get scheduled.
+A Deployment is fine when any pod can replace any other pod, like a stateless web server.
 
-A `Deployment` gives pods random names with no set order, which is fine for apps that don't hold state.
+For something like a database, I use a StatefulSet, because it gives each pod a fixed name and its own dedicated storage that follows it around, even if it moves to a different node.
 
-A `StatefulSet` gives pods fixed names, its own storage per pod, and starts them one at a time in order — that's what something like a database actually needs.
-
-Running a database on a plain `Deployment` looks fine at first, but breaks the moment you do a rolling update, since pod identity and storage aren't guaranteed to stay matched.
-
-That's exactly why `StatefulSet` exists, and why I don't treat it as optional for anything stateful.
+In my experience, running a database on a plain Deployment looks fine at first, but breaks during the first rolling update, since pod identity and storage aren't guaranteed to stay matched. That's exactly why I treat StatefulSet as required for anything stateful, not optional.
 
 </details>
 
@@ -196,15 +176,11 @@ That's exactly why `StatefulSet` exists, and why I don't treat it as optional fo
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-`CrashLoopBackOff` just means the pod keeps failing, and Kubernetes keeps trying again with a longer wait each time. It doesn't tell you why on its own.
+First I check `kubectl describe pod` for the exit code and recent events — that tells me what actually happened, not just that it failed.
 
-First, I check the pod's exit code and recent events.
+Then I check `kubectl logs --previous`, since the current instance already restarted, and the previous instance's logs are what actually show the real error.
 
-Then I check the logs from the last crash, since the current instance has already restarted with a clean slate.
-
-If the exit code is `137`, that almost always means it ran out of memory, so I'd check the memory limit against real usage. Anything else usually means the app itself hit an error.
-
-**Pod crashes → describe pod for exit code and events → logs from previous instance → exit code 137 means OOM, anything else means app error → fix the actual cause.**
+If the exit code is 137, that's almost always the app running out of memory, so I check the memory limit against real usage. Any other exit code usually points to a bug or bad config in the app itself, not the platform.
 
 </details>
 
@@ -215,15 +191,11 @@ If the exit code is `137`, that almost always means it ran out of memory, so I'd
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I check this in order, because guessing wastes time when there are several layers that could be the actual cause.
+I check this in a fixed order, so I don't waste time chasing the wrong thing.
 
-First, I make sure the Service is actually pointing at a healthy pod.
+First, whether the Service actually has a healthy pod behind it. Then the port setting, then the load balancer or ingress, then the security groups between the load balancer and the nodes, and finally DNS.
 
-Then I check the port setting, then the load balancer setup, then the security groups between the load balancer and the nodes, and finally DNS.
-
-**Service endpoints → port mapping → load balancer/ingress → security groups → DNS.**
-
-In my experience, the security group step is where most of these problems actually turn out to be.
+In my experience, the security group step is where I find the problem most often on EKS specifically — the load balancer's security group and the node's security group are two separate things, and people usually only check one of them.
 
 </details>
 
@@ -234,15 +206,11 @@ In my experience, the security group step is where most of these problems actual
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-In EKS, every pod gets a real IP address straight from the VPC, it's not some fake separate network.
+In EKS, every pod gets a real IP address from the VPC itself, not some separate fake network. That's actually why the number of pods per node is limited — it depends on how many IPs that instance type can hand out.
 
-That's actually why the number of pods per node is limited — it depends on how many IP addresses that instance type can hand out.
+When a pod calls another service by name, it goes through the cluster's DNS to find the address first, and then gets routed to the actual pod behind the scenes.
 
-When one pod talks to a service by name, it goes through the cluster's DNS first to find the address, and then gets routed to the right pod behind the scenes.
-
-**Pod calls a service name → cluster DNS resolves it → traffic gets routed to a real pod IP behind the service.**
-
-For big clusters, I'd switch that routing to a mode that scales better than the older default.
+For a cluster with a lot of traffic, I'd check whether the routing mode is actually set up to handle that scale well, since the default setup can start to slow down once you have a lot of services.
 
 </details>
 
@@ -255,13 +223,11 @@ For big clusters, I'd switch that routing to a mode that scales better than the 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I've run this three different ways, and each one trades off differently.
+I've run Jenkins all three ways at different points.
 
-A plain server install is simple, but it's a single point of failure, and how many builds can run at once is stuck at whatever that one server can handle.
+A plain server install is simple, but it's a single point of failure, and how many builds can run at once is limited by that one server. Running it in Docker helps a little, but builds can still leave leftover files behind for the next job.
 
-Running it in Docker helps a little, but builds can still leave old files behind for the next job.
-
-What I actually run is Jenkins on Kubernetes — every single build gets its own fresh, throwaway worker that's deleted right after, so nothing carries over between builds, and capacity grows with the cluster automatically.
+What I run now is Jenkins on Kubernetes — every build gets its own fresh worker that gets thrown away right after, so nothing carries over between builds, and capacity grows with the cluster automatically instead of being stuck at one fixed size.
 
 </details>
 
@@ -272,15 +238,11 @@ What I actually run is Jenkins on Kubernetes — every single build gets its own
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I don't call something "flaky" until I've actually checked, since that label gets misused a lot.
+I don't call something flaky until I've actually checked, since that label gets used too easily.
 
-First, I see if the failures line up with new workers starting up. If they do, that's a timing issue with the infrastructure, not a bad test.
+First I check if the failures line up with new build workers starting up — if they do, that's a timing issue with the infrastructure, not the test. Then I try rerunning with everything set to run one at a time. If the failure goes away, it was a resource conflict, not the test itself.
 
-Then I try rerunning the job with everything set to run one at a time. If the failure disappears, it was a resource conflict, not the test itself.
-
-**Failures line up with new agents → infra timing issue. Failure disappears at concurrency 1 → resource conflict. Neither of those → then it's actually a flaky test.**
-
-Only after ruling all that out do I actually mark a test as flaky and track it properly.
+Only after ruling both of those out do I actually mark it as a flaky test and track it properly, rather than just adding a retry and moving on.
 
 </details>
 
@@ -291,13 +253,11 @@ Only after ruling all that out do I actually mark a test as flaky and track it p
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I never update plugins by clicking around in the Jenkins interface — on a Kubernetes setup, that gets wiped out on the next deploy anyway.
+I never update plugins by clicking around in the Jenkins UI, since on a Kubernetes setup those changes get overwritten the next time it's deployed anyway.
 
-Plugin versions are set in one config file, and that's the real source of truth.
+Plugin versions are set in one config file, and that's the real source of truth. Before bumping a version, I test it on a separate non-production Jenkins first, using our actual pipelines, not a sample one.
 
-Before I bump a version, I test it on a separate, non-production Jenkins first, using our real pipelines.
-
-Then I roll it out in a way that automatically rolls back if something fails its health check.
+When I do roll it out, I use a deployment method that automatically rolls back if the health check fails, so I never end up stuck with a half-updated instance.
 
 </details>
 
@@ -308,13 +268,11 @@ Then I roll it out in a way that automatically rolls back if something fails its
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-The recovery path depends on where in the setup this actually happened.
+It depends on where this happens. If it's still the first-time setup, the starting password is in a file I can just read directly from the pod.
 
-If this is still the first-time setup, the starting password is sitting in a file I can read directly.
+If it's a real admin account lost after setup, I have to get into the server and reset it manually, which is not something you want to be figuring out for the first time during an actual incident.
 
-If it's a real lost account after that, I have to get inside the server and reset it through a script, which is not something you want to be doing during an actual incident.
-
-Going forward, the real fix is connecting Jenkins to the company's normal login system, so there's no single admin password to lose in the first place. I also make sure the Jenkins data gets backed up on a schedule, just in case.
+Going forward, the real fix is connecting Jenkins to the company's normal login system, so there's no single password to lose. I also make sure the Jenkins data is backed up on a schedule, just as a safety net.
 
 </details>
 
@@ -325,11 +283,9 @@ Going forward, the real fix is connecting Jenkins to the company's normal login 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Rollback isn't one single thing, every layer needs its own plan.
+Rollback isn't one thing, each layer needs its own plan.
 
-For the app in Kubernetes, there's a direct command to undo the last change, instantly, no rebuild needed.
-
-For Terraform, there's no real rollback command, so reviewing the plan carefully before applying is the real safety net.
+For the app in Kubernetes, there's a direct command to undo the last change instantly, no rebuild needed. For Terraform, there's no real rollback command, so reviewing the plan carefully before applying is the actual safety net.
 
 For source code, I always use a safe revert, never a hard reset on a shared branch, since that rewrites history everyone else already has.
 
@@ -344,13 +300,11 @@ For source code, I always use a safe revert, never a hard reset on a shared bran
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-The risk difference comes down to whether history gets rewritten or not.
+Merge just adds a new commit and keeps the real history, so it's always safe on a shared branch.
 
-**Merge** just adds a new commit and keeps history as it really happened, so it's always safe on a shared branch.
+Rebase rewrites history with new commit IDs, so doing it on a branch other people already have breaks their copy too.
 
-**Rebase** rewrites commit history with brand new IDs, and doing that on a branch others already have breaks their copy too.
-
-So my rule is simple — I only rebase my own branch before pushing it, never after it's shared with the team. Day to day, I prefer short branches that get merged into `main` quickly.
+So my rule is simple — I only rebase my own branch before I push it, never after it's shared. Day to day, I prefer short-lived branches that get merged into main quickly, rather than long-lived branches that drift and cause painful conflicts later.
 
 </details>
 
@@ -361,13 +315,11 @@ So my rule is simple — I only rebase my own branch before pushing it, never af
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I use an interactive rebase to squash a few messy commits into one clean commit.
+I use an interactive rebase to combine a few messy commits into one clean commit.
 
-The problem is, if that branch is already shared, this creates new commit IDs and breaks everyone else's copy of it.
+The problem is if that branch is already shared, this creates new commit IDs and breaks everyone else's copy. So I always force-push using the safer option that protects against overwriting someone else's work, not a plain force push.
 
-So I always use a safer force-push option that protects against overwriting someone else's work by accident.
-
-And if it's genuinely already shared, I give people a heads-up before I touch it.
+And if the branch really is already shared, I give the team a heads-up before I touch it.
 
 </details>
 
@@ -378,13 +330,11 @@ And if it's genuinely already shared, I give people a heads-up before I touch it
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-What's recoverable really depends on whether the work was ever pushed anywhere.
+The `.git` folder holds the whole project history, so losing it means losing anything that was never pushed anywhere else.
 
-The `.git` folder holds the entire history of the project. Losing it means losing everything that was never pushed anywhere else.
+If there's a remote and everything was already pushed, it's easy to fix — just get a fresh copy, nothing's actually lost. But any local commit that was never pushed is gone for good.
 
-If there's a remote and everything was already pushed, it's easy — just get a fresh copy, nothing's actually lost.
-
-But any local commit that was never pushed is gone for good. That's exactly why I push often, and I don't let real work sit only on my own machine for too long.
+That's exactly why I push often, and I don't let real work sit only on my own machine for too long.
 
 </details>
 
@@ -395,11 +345,11 @@ But any local commit that was never pushed is gone for good. That's exactly why 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-`git fetch` just downloads the latest changes, it doesn't touch your own files at all, so it's completely safe.
+`git fetch` just downloads the latest changes, it doesn't touch my own files at all, so it's completely safe.
 
-`git pull` does that same download, plus it automatically merges it into your current work — and if you have local changes that conflict, that can leave a mess.
+`git pull` downloads and then automatically merges it into my current work, and if I have local changes that conflict, that can leave a mess.
 
-I use `pull` for everyday work, but I never let it run inside a script or automation without a safety setting that stops it from silently merging something unexpected.
+I use pull for everyday work, but I never let it run inside a script or pipeline without a setting that stops it from silently merging something unexpected.
 
 </details>
 
@@ -412,13 +362,11 @@ I use `pull` for everyday work, but I never let it run inside a script or automa
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-The command is `terraform import`, but it only updates the state file — it does not write the matching code for you.
+The command is `terraform import`, but it only updates the state file — it doesn't write the matching code for me.
 
-If the code doesn't already match the real resource, the next plan will try to change or even delete it.
+So what I actually do is write the matching resource block first, run the import, and then run `terraform plan` right away to check nothing looks different.
 
-So my real steps are: write the matching code first, run the import, then run `plan` and make sure it shows no changes before I trust it.
-
-**Write matching HCL → run `terraform import` → run `terraform plan` → confirm zero diff.**
+For example, I've seen people skip that last check and end up with Terraform trying to delete the exact resource it just imported, because the code didn't fully match reality.
 
 </details>
 
@@ -429,13 +377,9 @@ So my real steps are: write the matching code first, run the import, then run `p
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-The real problem is there's no locking, and that's a much bigger issue than backups.
+The real problem is there's no locking. If two people run `apply` at the same time, one silently overwrites the other's changes, and Terraform ends up not even knowing some real resources exist anymore.
 
-If two people run `apply` at the same time, one silently overwrites the other's changes.
-
-Now Terraform doesn't even know some real resources exist anymore, since that record just got wiped out by the second apply.
-
-A shared backend with locking isn't optional for a team, it's required from day one. I also turn on versioning on that storage, since that's the real way to undo a bad state file.
+In my experience, a remote backend with locking, like S3 with a lock table, isn't optional for a team — it's needed from day one. I also turn on versioning on that storage, since that's the real way to recover a bad state file.
 
 </details>
 
@@ -446,15 +390,11 @@ A shared backend with locking isn't optional for a team, it's required from day 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-`terraform validate` only checks the syntax, it has no idea if something's actually valid on AWS's side.
+`terraform validate` only checks syntax, it has no idea if something's actually valid on AWS's side.
 
-So I layer several checks instead of relying on just one.
+So what I normally set up is a few checks in sequence — a format check, then validate, then a linter for real provider-level mistakes, then a security scan, and then a plan that a real person reviews before anything is applied.
 
-A format check, then validate, then a proper linter for real provider-level mistakes, then a security scan, and then a plan that a real person reviews on the pull request.
-
-**`fmt` → `validate` → `tflint` → security scan → reviewed `plan` → manual approval → `apply`.**
-
-The whole idea is catching mistakes early, not at apply time.
+The goal is catching mistakes as early as possible, not at apply time when it's already touching real infrastructure.
 
 </details>
 
@@ -467,13 +407,11 @@ The whole idea is catching mistakes early, not at apply time.
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I build shared, reusable pieces of code for things like a VPC or a database, with no environment-specific logic baked in.
+I build shared, reusable modules for things like a VPC or a database, with no environment-specific logic inside them.
 
-Then each environment gets its own small folder that calls those shared pieces with its own settings.
+Then each environment gets its own small folder that calls those modules with its own settings, and its own separate state file tied to its own account.
 
-Each environment also gets its own separate state file, tied to its own account, so nothing overlaps.
-
-CI switches into the right account before it ever touches anything real.
+CI switches into the correct account before it ever touches anything real, so there's no shared state that could accidentally get applied to the wrong environment.
 
 </details>
 
@@ -484,13 +422,11 @@ CI switches into the right account before it ever touches anything real.
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I don't rely on people remembering to point at the right config — that always breaks eventually.
+I don't rely on people remembering to point at the right config, since that eventually breaks.
 
-Instead, each account gets its own storage bucket for state, and the access policy only allows that account's own pipeline to touch it.
+Instead, each account gets its own storage bucket for state, and the access policy only allows that account's own pipeline to touch it. So even a mistake in a pipeline setting physically can't reach another account's state.
 
-So even a mistake in a pipeline setting physically can't read or write another account's state.
-
-That's a real wall, not just a rule written down somewhere.
+That's a real, structural wall, not just a rule written in a document somewhere.
 
 </details>
 
@@ -501,13 +437,11 @@ That's a real wall, not just a rule written down somewhere.
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-The thing most people miss is that Terraform's state file is plain text by default.
+Something people miss is that Terraform's state file is plain text by default, so even a secret passed in as a variable ends up sitting in that file.
 
-So even a secret passed in as a variable ends up sitting right there in the state file, even if it's never written directly in the code.
+My rule is simple — secrets never go in as raw variables. They live in a proper secrets manager, and Terraform just references them.
 
-My rule is simple — secrets never go in as raw variables. They live in a real secrets manager, and Terraform just references them.
-
-On top of that, I turn on encryption on the state storage, and I lock down who's even allowed to read it.
+On top of that, I turn on encryption on the state storage itself, and I make sure only the people or pipelines who really need it can read it.
 
 </details>
 
@@ -518,15 +452,11 @@ On top of that, I turn on encryption on the state storage, and I lock down who's
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-First, Terraform connects to the right backend for that environment.
+First, Terraform connects to the right backend for that environment, then builds a plan, and that plan gets posted somewhere a person can actually review it.
 
-Then it builds a plan, and that plan gets posted somewhere a real person can review it — that's the actual safety check.
+After manual approval, specifically for production, the pipeline switches into that account and applies that exact same plan, not a fresh one.
 
-After manual approval for production specifically, the pipeline switches into the right account and applies that exact same plan, not a new one.
-
-**`init` → `plan` posted for review → manual approval on prod → assume account role → `apply` the saved plan → logs kept for audit.**
-
-Every log and plan gets saved, tied back to the commit that started it.
+Every log and plan output gets kept, tied back to the commit that started it, so there's a clear audit trail if something needs to be checked later.
 
 </details>
 
@@ -539,13 +469,11 @@ Every log and plan gets saved, tied back to the commit that started it.
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-`terraform plan` shows a change that would undo the console edit and put things back to what's in the code — that's totally normal, Terraform has no idea who made a change, it just compares.
+`terraform plan` will show a change that puts things back to what's in the code — that's expected, since Terraform doesn't know who made a change, it just compares.
 
-The important part is actually reading that change before applying it.
+The important part is actually reading that change before applying it. If someone made an emergency fix by hand during an outage, blindly applying would undo that fix.
 
-If someone made an emergency fix by hand during an outage, blindly applying would undo that fix.
-
-So I check first — if it was a real, needed fix, I update the code to match it instead of reverting it.
+So I always check first — if it was a real fix that should stay, I update the code to match it instead of reverting it.
 
 </details>
 
@@ -556,13 +484,11 @@ So I check first — if it was a real, needed fix, I update the code to match it
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Terraform tracks resources by their name in the code, not some hidden ID.
+Terraform tracks resources by their name in the code, not some hidden ID, so renaming things can make it think the old one was deleted and a new one created.
 
-So renaming things can make it think the old one was deleted and a new one created, even though the real resource never changed at all.
+I always version my modules, and I test any change in a non-production environment first, checking the plan shows no surprise deletes.
 
-I always version modules, and I test any change in a non-production environment first, checking that the plan shows no surprise deletes.
-
-If I genuinely need to rename something without actually touching the real resource, there's a specific block made for exactly that.
+If I genuinely need to rename something without touching the real resource, Terraform has a specific way to handle exactly that, so it updates the tracking instead of recreating anything.
 
 </details>
 
@@ -573,11 +499,11 @@ If I genuinely need to rename something without actually touching the real resou
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-One provider setting only covers one region, so working across regions needs separate, named provider blocks — one per region.
+One provider setting only covers one region, so working across regions needs separate provider blocks, one per region.
 
-The thing people miss is that reusable modules don't automatically know which region to use, you have to pass that in yourself.
+What people often miss is that a reusable module doesn't automatically know which region to use — you have to pass that in explicitly.
 
-Skipping that step is exactly how a resource ends up quietly deployed in the wrong region.
+Skipping that step is exactly how a resource ends up deployed in the wrong region without anyone noticing right away.
 
 </details>
 
@@ -590,11 +516,9 @@ Skipping that step is exactly how a resource ends up quietly deployed in the wro
 
 Just telling people not to do it isn't a real control, it has to be enforced through actual permissions.
 
-The production deploy role can only be used by the CI pipeline itself — no person has a way to use it directly, even if they wanted to.
+The production deploy role can only be used by the CI pipeline itself, no person has a way to use it directly. Write access to the production state is locked down the same way.
 
-Write access to the production state is locked down the same way.
-
-I might allow read-only access for debugging, but nobody outside CI can ever actually apply.
+I might allow read-only access for debugging, but nobody outside CI can actually apply changes.
 
 </details>
 
@@ -607,11 +531,9 @@ I might allow read-only access for debugging, but nobody outside CI can ever act
 
 I split infrastructure into layers — network, then compute, then data — so a mistake in one layer can't touch another's state.
 
-To connect them, I read the upstream layer's output as a read-only reference.
+To connect them, I read the upstream layer's output as a read-only reference, so the newer layer can use things like the VPC's subnet IDs without ever being able to change the VPC itself.
 
-That lets the newer layer use things like the VPC's subnet IDs without ever being able to change the VPC itself.
-
-The connection only ever flows in one direction, never both ways.
+That connection only ever flows in one direction, which keeps the dependency between stacks clear and predictable.
 
 </details>
 
@@ -622,15 +544,11 @@ The connection only ever flows in one direction, never both ways.
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-The good news is this is fully recoverable, since Terraform tracks progress as it goes, not just at the end.
+The good news is Terraform tracks progress as it goes, so anything that succeeded is already recorded correctly in the state.
 
-Anything that succeeded is already tracked correctly in the state.
+First I figure out why it actually failed — usually a permissions issue or a service limit — fix that, then run `apply` again. It only touches what's still missing, it doesn't redo what already worked.
 
-I first figure out why it actually failed — usually a permissions or a limit issue — fix that, then just run `apply` again, and it only touches what's still left to do.
-
-**Apply fails partway → check the real error → fix the root cause → re-run `apply` → only remaining resources get touched.**
-
-If the state itself ever looks wrong, I restore an earlier saved version instead of guessing.
+If the state itself looks inconsistent afterward, I restore it from the last good backup instead of guessing.
 
 </details>
 
@@ -645,13 +563,9 @@ If the state itself ever looks wrong, I restore an earlier saved version instead
 
 I check this in the same order every time, so I don't waste time chasing the wrong layer.
 
-Security group first, then the network-level rules, since those need both directions allowed, not just one like security groups.
+Security group first, then the network-level rules, since those need both inbound and outbound allowed, not just one direction like security groups. Then the route table, then the instance itself, and only last, anything on the operating system.
 
-Then the route table, then the instance itself, and only last, anything on the operating system, like a local firewall.
-
-**Security group → NACL → route table → instance/OS status → local firewall.**
-
-Checking out of order just means chasing symptoms that aren't the real cause.
+Checking out of order just means chasing symptoms that aren't the actual cause.
 
 </details>
 
@@ -662,13 +576,11 @@ Checking out of order just means chasing symptoms that aren't the real cause.
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-**VPC Peering** connects two networks directly, but it doesn't pass through.
+VPC Peering connects two networks directly, but it doesn't pass through — if A is connected to B, and B to C, A still can't reach C. That gets hard to manage once you have more than a handful of networks.
 
-If A is connected to B, and B is connected to C, A still can't reach C. That gets hard to manage once you have more than a handful of networks.
+Transit Gateway solves this with one central hub that everything connects to, though it costs more and becomes one more thing to watch.
 
-**Transit Gateway** fixes this with one central hub that everything connects to, but it costs more and becomes one bigger thing to keep an eye on.
-
-I use Peering for a small, stable set of networks, and move to Transit Gateway once I actually need that hub-style setup.
+In my experience, I use Peering for a small, stable set of networks, and move to Transit Gateway once there are enough networks that managing individual connections becomes a real burden.
 
 </details>
 
@@ -681,13 +593,9 @@ I use Peering for a small, stable set of networks, and move to Transit Gateway o
 
 "The database is slow" can mean a few different things, so I check them in order.
 
-First CPU and memory — if that's maxed out, it's a real capacity problem.
+First CPU and memory — if that's maxed out, it's a real capacity issue. Then the connection count — if that's climbing, it's usually the app not managing connections properly, not the database itself.
 
-Then the number of connections — if that's climbing, it's almost always the app not managing connections properly, not the database itself.
-
-Then I check for slow queries — a missing index can look exactly like a capacity problem, but the fix there is an index, not a bigger server.
-
-**CPU/memory check → connection count check → slow query check → fix matches whichever layer is actually the problem.**
+Then I check for slow queries specifically, since a missing index can look exactly like a capacity problem, but the fix there is an index, not a bigger instance.
 
 </details>
 
@@ -698,13 +606,11 @@ Then I check for slow queries — a missing index can look exactly like a capaci
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-A NAT Gateway only covers one zone.
+A NAT Gateway only covers one availability zone. If every private subnet across all zones points at just one NAT Gateway to save cost, losing that one zone kills outbound internet everywhere, not just there.
 
-If every private subnet across all zones points at just one NAT Gateway to save money, losing that one zone kills outbound internet access everywhere, not just in that zone.
+The setup I use is one NAT Gateway per zone, so a failure only affects that single zone.
 
-The right setup is one NAT Gateway per zone, so a failure only affects that single zone.
-
-It costs more, but it's worth it for production.
+It costs more, but for production, I think it's worth it.
 
 </details>
 
@@ -715,11 +621,11 @@ It costs more, but it's worth it for production.
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-We moved workloads to Kubernetes with autoscaling, so we stopped paying for capacity we didn't actually need all day.
+We moved workloads to Kubernetes with autoscaling, so we stopped paying for capacity we didn't actually need around the clock.
 
-We added cheaper, interruptible instances for workloads that could handle being restarted, which cut compute cost a lot on its own.
+We added interruptible instances for workloads that could handle being restarted, which cut compute cost a lot on its own.
 
-We also made our Docker images smaller, cleaned up unused resources like old storage volumes and load balancers nobody was using, and added storage lifecycle rules to move old data to cheaper storage automatically.
+We also made our Docker images smaller, cleaned up unused resources like old storage volumes and load balancers nobody was using, and added storage lifecycle rules so old data moved to cheaper storage automatically.
 
 </details>
 
@@ -732,19 +638,11 @@ We also made our Docker images smaller, cleaned up unused resources like old sto
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-This usually happens when the new ECS tasks are not fully ready, but the ALB starts sending traffic to them too early.
+This usually happens because the new tasks aren't fully ready yet, but the load balancer starts sending them traffic too early.
 
-First, I check how much time the application actually needs to start. Then I configure the ECS `healthCheckGracePeriodSeconds` so ECS gives the new task enough time to start without marking it unhealthy.
+First, I check how long the app actually takes to start, and then I set the ECS health check grace period to match that, so ECS doesn't mark the task unhealthy while it's still starting up. I also make sure the health check itself is actually checking readiness, not just that the process is running.
 
-I also make sure the ALB health check is checking a proper readiness endpoint, so traffic is sent only when the application is actually ready.
-
-For the old tasks, I configure the ALB `deregistration_delay` so existing requests get enough time to complete before the task is stopped.
-
-So the flow should be:
-
-**New task starts → application becomes ready → ALB health check passes → traffic goes to new task → old task is deregistered → existing requests finish → old task stops.**
-
-In our case, the fix was mainly to align these timings instead of changing only one setting. This removed the 502s during deployment.
+For the old tasks, I set the load balancer's deregistration delay so any requests already in progress get time to finish before the task is stopped. In our case, fixing this was about aligning all these timings together, not changing just one setting.
 
 </details>
 
@@ -755,13 +653,11 @@ In our case, the fix was mainly to align these timings instead of changing only 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-These two settings control opposite ends of a task's life, and mixing them up means fixing the wrong problem.
+These two settings control opposite ends of a task's life.
 
-`healthCheckGracePeriodSeconds` is about new tasks just starting up — it stops ECS from killing them too soon.
+The grace period is about new tasks just starting up — it stops ECS from killing them too early. The deregistration delay is about old tasks shutting down — it gives the load balancer time to stop sending them traffic first.
 
-`deregistration_delay` is about old tasks shutting down — it gives the load balancer time to stop sending them traffic first.
-
-If new tasks keep crashing right after they start, that's the grace period setting. If errors happen specifically when old tasks are being removed, that's the deregistration delay.
+If new tasks keep crashing right when they start, that's the grace period setting. If errors happen specifically when old tasks are being removed, that's the deregistration delay.
 
 </details>
 
@@ -772,15 +668,11 @@ If new tasks keep crashing right after they start, that's the grace period setti
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-The check interval just controls how often the health check runs, that part's fine on its own.
+The interval just controls how often the check runs, that part's fine on its own. The real risk is if ECS's grace period is shorter than the actual 90 seconds the app needs to start.
 
-The real problem is if ECS's grace period is shorter than the actual 90 seconds the app needs.
+If it is, ECS kills the task before it ever gets a fair chance, no matter how the load balancer's interval is set.
 
-If it is, ECS kills the task before it ever gets a fair chance to become healthy, and that happens no matter how the ALB interval is set.
-
-**App needs 90s to start → grace period must be 120s or more → health check only passes once app is truly ready → ALB starts sending traffic.**
-
-So I set that grace period to something like 120 seconds, with real headroom.
+So I'd set the grace period to something like 120 seconds, with real headroom above the measured startup time, and make sure the health check only passes once the app is actually ready.
 
 </details>
 
@@ -793,11 +685,7 @@ So I set that grace period to something like 120 seconds, with real headroom.
 
 A 502 just means the load balancer didn't get a good response from the app, it doesn't tell you why on its own.
 
-I go straight to the load balancer's access logs and check the specific field showing the app's response code.
-
-If that field is empty, the load balancer never even reached the app — that's an infrastructure problem.
-
-If it shows a real number, like a `500`, the app did respond, just with an error — that's a code problem.
+I check the load balancer's access logs and look at the specific field showing the app's response code. If that field is empty, the load balancer never even reached the app — that's an infrastructure issue. If it shows a real number, like 500, the app did respond, just with an error — that's a code issue.
 
 That one field tells me exactly where to look next.
 
@@ -814,11 +702,9 @@ That one field tells me exactly where to look next.
 
 Secrets never go directly into config files that live in Git, since even deleting them later doesn't remove them from the history.
 
-They live in a secrets manager instead, and get pulled in and decrypted right at deploy time.
+They live in a secrets manager instead, and get pulled in and decrypted right at deploy time. The Lambda's own permissions only allow it to access the exact secret it needs, nothing broader.
 
-The Lambda's own permissions only allow access to the exact secret it needs, nothing broader.
-
-That way, even if the function were somehow compromised, it couldn't read anything else.
+That way, even if the function were compromised somehow, it couldn't read anything else it doesn't already have access to.
 
 </details>
 
@@ -829,13 +715,11 @@ That way, even if the function were somehow compromised, it couldn't read anythi
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Access keys that sit in CI forever are a real risk, they don't expire, and they're hard to revoke fast if something goes wrong.
+Static access keys sitting in CI are a real risk, since they don't expire and are hard to revoke fast if something goes wrong.
 
-Instead, I use a system where CI requests short-lived credentials tied to a specific role, and that role only trusts that exact pipeline.
+What I use instead is a setup where CI requests short-lived credentials tied to a specific role, and that role only trusts that exact pipeline. From there, it assumes a role into the target account with permissions scoped to just that job.
 
-From there, it switches into each target account with permissions scoped tightly to just that job.
-
-**CI job starts → requests short-lived token → assumes scoped role → switches into target account → runs with tight permissions → every action logged.**
+Every one of those actions gets logged too, so there's a full trail if anything ever needs to be checked.
 
 </details>
 
@@ -850,7 +734,7 @@ Both can encrypt values, so that's not really the difference.
 
 Secrets Manager can automatically rotate credentials on a schedule, Parameter Store can't do that on its own.
 
-So I use Parameter Store for config and secrets that never need rotating, and Secrets Manager for anything like a database password that genuinely should change regularly.
+So I use Parameter Store for config and secrets that never need to rotate, and Secrets Manager for anything like a database password that genuinely should change regularly.
 
 </details>
 
@@ -863,11 +747,9 @@ So I use Parameter Store for config and secrets that never need rotating, and Se
 
 A branch check written into the pipeline file alone isn't a real wall, since anyone with edit access could accidentally break it.
 
-So I enforce the real rule at the permissions level — the production role only trusts requests coming from the `main` branch specifically.
+So I enforce the actual rule at the permissions level — the production role only trusts requests coming from the main branch specifically. Even if the pipeline file gets misconfigured, a feature branch trying to use that role just gets rejected outright.
 
-Even if the pipeline file gets messed up, a feature branch trying to use that role just gets rejected outright.
-
-That's the boundary that actually holds, no matter what the pipeline file says.
+That's the boundary that actually holds, regardless of what the pipeline file says.
 
 </details>
 
@@ -880,13 +762,11 @@ That's the boundary that actually holds, no matter what the pipeline file says.
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-A cold start is the time it takes to spin up a brand new environment.
+A cold start is the time it takes to spin up a brand new environment — downloading the code, starting the runtime, and running anything outside the main handler, like setting up a database connection.
 
-That means downloading the code, starting the runtime, and running anything outside the main handler, like setting up a database connection.
+That setup only happens once per environment, not on every call, so a common fix is moving that setup code outside the handler function.
 
-That setup only happens once per environment, not on every single call, so the fix is moving that code outside the handler.
-
-For traffic that's predictable and time-sensitive, keeping a set number of environments warm ahead of time helps. It doesn't help with a sudden, unplanned spike bigger than what was prepared for.
+For predictable, time-sensitive traffic, keeping a set number of environments warm ahead of time helps, but it doesn't help with a sudden, unplanned spike bigger than what was prepared for.
 
 </details>
 
@@ -899,9 +779,7 @@ For traffic that's predictable and time-sensitive, keeping a set number of envir
 
 SNS can deliver the same message more than once, that's just how it works.
 
-So the function receiving it has to handle a duplicate safely, or you end up with duplicate actions, like two database rows instead of one.
-
-I always check a message ID against a small lookup table before actually processing it, so a repeat message is just ignored.
+So the function receiving it has to handle a duplicate safely, or you end up with duplicate actions, like two database rows instead of one. I always check a message ID against a small lookup table before processing it, so a repeat message is just ignored.
 
 I also add a backup queue for anything that keeps failing, so it doesn't just quietly disappear.
 
@@ -916,11 +794,9 @@ I also add a backup queue for anything that keeps failing, so it doesn't just qu
 
 One codebase, with a separate config file per environment for anything that isn't sensitive, like a network ID.
 
-Secrets are never in those files at all — they get pulled from the secrets manager at deploy time, scoped so each account can only read its own.
+Secrets are never in those files — they get pulled from the secrets manager at deploy time, scoped so each account can only read its own.
 
-The pipeline picks both the AWS account and the matching config together, so they can never drift apart from each other.
-
-And the actual deployment package gets built once, then promoted through every environment as-is.
+The pipeline picks both the AWS account and the matching config together, so they can never drift apart, and the actual deployment package gets built once and promoted through every environment as-is.
 
 </details>
 
@@ -933,11 +809,11 @@ And the actual deployment package gets built once, then promoted through every e
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-CloudTrail tells you who changed what. Flow Logs tell you what network traffic actually happened. AWS Config tells you what a resource's setup looked like over time.
+CloudTrail tells you who changed what. Flow Logs tell you what network traffic actually happened. Config tells you what a resource's setup looked like over time.
 
 None of them alone gives the full picture — you need all three together, lined up by time, to really understand an incident.
 
-I ship all of it into one central place, so I can search across everything at once during an investigation.
+I ship all of it into one central place so I can search across everything at once during an investigation, rather than checking three separate consoles under time pressure.
 
 </details>
 
@@ -948,15 +824,11 @@ I ship all of it into one central place, so I can search across everything at on
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Evictions mean memory is full, but the actual reason matters.
+Evictions mean memory is full, but the reason matters.
 
-I check if memory use keeps climbing with no leveling off — that usually means the app is writing data without ever setting it to expire, which is an app bug, not a sizing problem.
+If memory use keeps climbing with no leveling off, that usually points to an app bug — keys being written without an expiry, so they build up forever. If usage is genuinely large but steady, that's real undersizing, and I'd scale the cluster.
 
-If usage is genuinely large but steady, that's real undersizing, and I'd scale the cluster.
-
-**Memory climbing with no plateau → app bug, missing TTLs. Memory large but steady → real undersizing, scale the cluster.**
-
-I also always double-check the eviction setting is actually right for a cache, not something that just stops accepting writes when full.
+I also always check the eviction setting itself is actually right for a cache, not something that just stops accepting writes once it's full.
 
 </details>
 
@@ -967,13 +839,11 @@ I also always double-check the eviction setting is actually right for a cache, n
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-Basic metrics and logs alone can't show you a slow request as it travels across five different services.
+Basic metrics and logs alone can't show you a slow request as it moves across five different services — for that, real tracing is needed so you can see the full path of one request.
 
-For that you need real tracing, so you can see the full path of one request.
+I also alert on things users actually feel, like error rate and slow response times, not just CPU usage, since CPU alone can miss a real problem.
 
-I also alert on things users actually feel, like error rate and slow response times, not just server CPU, since CPU alone can miss real problems.
-
-And backups only actually count if the restore has been tested, not just set up and forgotten.
+And backups only really count if the restore has been tested, not just set up and left alone.
 
 </details>
 
@@ -984,13 +854,11 @@ And backups only actually count if the restore has been tested, not just set up 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-The loop is simple, and it repeats the same way every time.
+The loop is simple and repeats the same way every time. Detect it fast using real symptoms like error rate, dig in using logs and traces to find the actual cause, then fix the immediate problem first, even before the full root cause is understood.
 
-Detect it fast using real symptoms like error rate. Dig in using logs and traces to find the actual cause. Then fix the immediate problem first, even before the deeper root cause is fully understood.
+After that, I always run a blameless review with real action items, not just a report nobody follows up on.
 
-**Detect via symptom-based alerts → dig in with logs and traces → apply the fastest safe fix → run a blameless review → track real action items.**
-
-After that, I always run a blameless review with real action items, not just a report nobody follows up on. Without that last step, the same problem just comes back later.
+Without that last step, the same problem just comes back later.
 
 </details>
 
@@ -1009,11 +877,9 @@ The command is:
 find /var/log -type f -size +50M -mtime +30 -delete
 ```
 
-The key part is `-type f` — without it, folders could match too, and combined with delete, that could wipe out whole directories by accident.
+The key part is `-type f` — without it, folders could match too, and combined with delete, that could remove whole directories by accident.
 
-I always swap the delete part for a print first, and check the list of what would actually get removed, before running the real command.
-
-That matters most on a server I haven't worked on before.
+I always swap the delete for a print first and check the list of what would actually get removed, before running the real command, especially on a server I haven't worked on before.
 
 </details>
 
@@ -1026,11 +892,9 @@ That matters most on a server I haven't worked on before.
 
 A simple search for the word "ERROR" anywhere in a line will also match something like "error_count field updated," which isn't a real error at all.
 
-That quietly gives a wrong number, with no warning that anything's off.
+That quietly gives a wrong number with no warning that anything's off. I always match on a proper word boundary, or better, check the actual log level field if the logs are structured.
 
-I always match on a proper word boundary, or better, check the actual log level field if the logs are structured.
-
-At real scale, this kind of counting belongs in a proper log search tool, not a small local script.
+At real scale, this kind of counting belongs in a log search tool like CloudWatch Insights, not a small local script.
 
 </details>
 
@@ -1043,11 +907,9 @@ At real scale, this kind of counting belongs in a proper log search tool, not a 
 
 A raw shell command just runs every single time, no matter what.
 
-Ansible's own install module checks the current state first, and only makes a change if it's actually needed.
+Ansible's own install module checks the current state first, and only makes a change if it's actually needed, so running it again just reports nothing changed instead of doing the work over.
 
-So running it again reports nothing changed instead of doing the work over.
-
-I always use these built-in modules instead of raw shell commands, since that gives me a real, honest signal when something unexpected actually changed.
+I always use these built-in modules instead of raw shell commands, since that gives me an honest signal when something unexpected actually changed.
 
 </details>
 
@@ -1058,13 +920,9 @@ I always use these built-in modules instead of raw shell commands, since that gi
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-This isn't just about keeping things tidy, it's about control.
+This isn't just about tidiness, it's about control.
 
-**Roles** hold reusable automation that shouldn't change between projects.
-
-**`group_vars`** set defaults for a whole group of servers.
-
-**`host_vars`** override just one specific server, and that always wins over the group setting.
+Roles hold reusable automation that shouldn't change between projects. `group_vars` sets defaults for a whole group of servers. `host_vars` overrides just one specific server, and that always wins over the group setting.
 
 This setup is exactly what lets the same automation run safely across dev, staging, and prod, without changing the actual logic each time.
 
@@ -1079,15 +937,11 @@ This setup is exactly what lets the same automation run safely across dev, stagi
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-The whole point of using multiple AWS accounts is keeping failures contained — a mistake in dev should never be able to touch prod.
+In my experience, the whole point of using multiple AWS accounts is keeping failures contained — a mistake in dev should never be able to touch prod.
 
-I run separate accounts per environment, Lambda for event-driven work and containers behind a load balancer for everything else, a mix of relational and key-value databases depending on the need, and queues to keep services loosely connected instead of calling each other directly.
+We run separate accounts per environment, Lambda for event-driven work and containers behind a load balancer for everything else, a mix of relational and key-value databases depending on the need, and queues to keep services loosely connected instead of calling each other directly.
 
-Terraform is modular, with its own state per account, and deploys only happen through CI using short-lived access, never from anyone's own laptop.
-
-**Commit merges → CI builds artifact → assumes short-lived role into target account → Terraform applies infra → app deploys → production gated behind manual approval.**
-
-Production specifically needs manual approval, enforced through real permissions, not just a setting in the pipeline file, and secrets always come from a secrets manager, never from the code itself.
+Terraform is modular with its own state per account, and deploys only happen through CI using short-lived access, never from anyone's own laptop. Production specifically needs manual approval, enforced through real permissions, not just a pipeline setting, and secrets always come from a secrets manager, never from the code itself.
 
 </details>
 

@@ -33,11 +33,7 @@ I never touch production resources during this, it's purely a state file move.
 
 First, I define the new S3 backend block in the code, then run `terraform init -migrate-state`, and Terraform copies the existing state over and asks for confirmation before switching.
 
-I always back up the old state file first, just in case.
-
-**Add S3 backend block → back up old state → `terraform init -migrate-state` → confirm the copy → run `plan` to prove zero drift.**
-
-Once it's migrated, I run a `plan` immediately to confirm it shows zero changes, which proves nothing actually drifted during the move.
+I always back up the old state file first, just in case. Once it's migrated, I run a `plan` immediately to confirm it shows zero changes, which proves nothing actually drifted during the move.
 
 </details>
 
@@ -114,8 +110,6 @@ This happens when provider versions aren't pinned tightly, so CI just pulls in w
 
 I always pin exact provider versions in the `required_providers` block, and commit the `.terraform.lock.hcl` file to Git, so every environment resolves the exact same version.
 
-**Pin exact version in `required_providers` → commit the lock file → bump version on a branch → test in non-prod → review diff → merge.**
-
 Upgrades are a deliberate, reviewed step — bump the version, run `plan` in a non-prod environment first, and check the diff carefully before it ever touches prod.
 
 </details>
@@ -162,8 +156,6 @@ I look at the real relationship first, since forcing it with tricks like `depend
 I don't rely on someone catching it in a manual review, since that's easy to miss.
 
 I run a policy-as-code tool, like `tfsec`, `checkov`, or Sentinel if we're on Terraform Cloud, as a required step in the pipeline before `plan` even gets approved.
-
-**Plan is generated → policy-as-code scan runs → violation found → pipeline fails and blocks the merge → no violation → plan proceeds to review.**
 
 If it flags a violation, the pipeline just fails outright and blocks the merge. That way the check is automatic and consistent, not dependent on someone remembering to look for it.
 
