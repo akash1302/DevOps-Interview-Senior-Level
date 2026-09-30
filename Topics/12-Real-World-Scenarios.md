@@ -85,14 +85,20 @@ If it's already partly rolled out, `kubectl rollout undo deployment/<name>` gets
 
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
+First, I would check when the latency started and confirm whether it started immediately after the release.
 
-A latency spike right after a release is the release until proven otherwise, so I check when it actually started first.
+I would check the ALB metrics and CloudWatch first, mainly target response time, request count, 4xx/5xx errors, CPU, and memory. This tells me whether the issue is at the load balancer, application, or infrastructure level.
 
-I look at whether it's affecting all requests or just a specific endpoint, and I check p95 and p99, not just the average, since average latency can hide a problem affecting a smaller slice of traffic. Then I follow the request path — app CPU and memory, database response time, connection pools, and any new downstream calls the release introduced.
+Then I would check the application logs and look for slow API calls, timeout errors, connection errors, or any errors introduced by the new release.
 
-For example, a new code change that adds one more database query per request, or a synchronous call to another service, can noticeably slow things down under real traffic.
+If the application is waiting on the database, I would check RDS metrics such as CPU, connections, locks, and slow queries. I would also check the application's database connection pool because exhausted connections can cause requests to wait.
 
-If it's clearly the release and users are affected, I don't spend half an hour proving the exact cause while things are degraded — I roll back first and investigate afterward with the pressure off.
+I would compare the current deployment with the previous version and check what code or configuration was changed.
+
+If the new release is clearly causing the problem and the impact is high, I would rollback to the last stable version. Once the service is stable, I would reproduce the issue and find the actual root cause before deploying again.
+
+So my approach is basically: check metrics → check logs → identify where the request is getting slow → compare the release changes → rollback if required → fix the root cause.
+
 
 </details>
 
