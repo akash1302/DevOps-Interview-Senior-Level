@@ -106,11 +106,13 @@ I also always set a minimum and maximum replica count, so it can't scale down to
 <details>
 <summary><b>🔍 View Candidate's Answer</b></summary>
 
-I never upgrade production first. I test the new version on a non-production cluster running the same apps, and check what's changed or removed in that version.
+First I check the current EKS version, node groups, workloads and all important add-ons. Then I check the target Kubernetes version for deprecated or removed APIs and compatibility issues.
 
-For the real upgrade, I do the control plane first, since it can run slightly ahead of the worker nodes for a short time. Then I upgrade worker nodes in small batches, moving pods off each one before touching it, instead of doing it all at once.
+I upgrade the non-prod cluster first and test the actual applications there. I check deployments, pods, networking, ingress, storage, autoscaling and application logs.
 
-That way, if something breaks partway through, only part of the cluster is affected, not everything.
+Once non-prod is stable, I prepare production with backups, monitoring and a recovery plan. Then I upgrade the production control plane, add-ons and node groups in a controlled way during a low-traffic window.
+
+After the upgrade, I closely monitor the applications, nodes, pods, errors and latency. I only close the change after confirming the applications are stable
 
 </details>
 
