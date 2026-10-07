@@ -35,6 +35,7 @@ This README covers 14 core domains as one continuous reference (table of content
 | 14 | Database & Caching | [`Topics/14-Database-Caching.md`](./Topics/14-Database-Caching.md) |
 | 15 | Cost Optimization / FinOps | [`Topics/15-Cost-Optimization-FinOps.md`](./Topics/15-Cost-Optimization-FinOps.md) |
 | 16 | AWS Scenario-Based | [`Topics/16-AWS-Scenario-Based.md`](./Topics/16-AWS-Scenario-Based.md) |
+| 17 | Naggarow Interview Senior Level | [`17-naggarow.md`](./Topics/17-naggarow.md) |
 
 Each topic file uses the same style of answers as this README.
 
